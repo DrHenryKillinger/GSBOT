@@ -34,7 +34,7 @@ var retreive = function(param) {
 // Saves options to localStorage.
 var defValue = [
 	['separator', 'This string will be insered between each songs, when doing /songPreview.', ' --- '],
-	['prefixRename', 'Will try to find this string in the description of the broadcast, and write " {EGSA Bot} X songs left." after it. If there is no match, it will remove the entire description, so be careful!', 'Broadcaster:'],
+	['prefixRename', 'Will try to find this string in the description of the broadcast, and write " {GS Bot} X songs left." after it. If there is no match, it will remove the entire description, so be careful!', 'Broadcaster:'],
 	['welcomeMessage', 'Place this in chat after the activation.', 'Server mode enabled. Let\'s take over the world!'],
 	['defaultSongPreview', 'The number of songs that will be displayed on /songPreview.', 10],
 	['maxSongPreview', 'Since a user can do "/songPreview X" to preview X songs, we need a limit, it is defined here.', 25],
@@ -45,8 +45,7 @@ var defValue = [
 	['whitelistIncludesFollowing', 'If checked, all the people you follow will have the ability to /guest.', true],
 	['blacklist', 'The ID of the grooveshark user in this list will not be able to /guest, even if they are being followed by you, and if you checked whitelistIncludesFollowing. Separate each ID with a comma.', []],
 	['whiteListName', 'The rank of person in the whitelist, used when non whitelist people try to guest "Only [this name] can use that feature, sorry!"', 'broadcaster'],
-	['historyLength', 'The number of tracks that will be saved in a local "history". When playing from collection, the bot will TRY (no promises) to get a song that was not in this history.', '50'],
-	['rules', 'Place this in the chat after the command /rules. Separate each rule with a comma.', ['Epic GrooveShark Assembly,']]
+	['historyLength', 'The number of tracks that will be saved in a local "history". When playing from collection, the bot will TRY (no promises) to get a song that was not in this history.', '50']
 ];
 
 var content = document.getElementById('content');

@@ -73,7 +73,7 @@ var GU = {
         var maxDescriptionLength = 145;
     
         var defName = attributes.Description;
-        defName = defName.substr(0, defName.indexOf(GUParams.prefixRename)) + GUParams.prefixRename + ' [EGSA Bot] ';
+        defName = defName.substr(0, defName.indexOf(GUParams.prefixRename)) + GUParams.prefixRename + ' {GS Bot} ';
         if (playingRandom)
         {
             defName += 'Playing from collection';
@@ -99,9 +99,7 @@ var GU = {
  'previewSongs': function(msg, parameter)
     {
         var nbr = parseInt(parameter);
-        if (nbr > 10)
-			nbr = 10
-		if (nbr <= 0 || isNaN(nbr))
+        if (nbr <= 0 || isNaN(nbr))
             nbr = GUParams.defaultSongPreview;
         if (nbr > GUParams.maxSongPreview)
             nbr = GUParams.maxSongPreview;
@@ -114,7 +112,7 @@ var GU = {
             var curr = songs[i];
             if (curr == null)
                 break;
-            string = string + '#' +i + ': ' + curr.SongName + GUParams.separator;
+            string = string + '#' +i + ': ' + curr.SongName + ' ~ From: ' + curr.AlbumName + GUParams.separator;
         }
         GU.sendMsg('Next songs are: ' + string.substring(0, string.length - GUParams.separator.length));
     },
@@ -374,7 +372,7 @@ var GU = {
     },
  'ping': function()
     {
-        GU.sendMsg('Pong!');
+        GU.sendMsg('Ping resp!');
     },
  'about': function()
     {
@@ -435,45 +433,7 @@ var GU = {
                 setTimeout(GU.startBroadcasting, 3000, bc);
             });
         }
-    },
- 'fetchLast': function(message, parameter)
-    {
-        var count     = 1;
-        var queue     = GS.Services.SWF.getCurrentQueue();
-        var nextIndex = queue.activeSong.index+1;
-
-        if (parameter && parseInt(parameter) > 0)
-            count = parseInt(parameter);
-
-        if (nextIndex < queue.songs.length-count)
-        {
-            var lastSongs = queue.songs.slice(-count);
-            lastSongs = lastSongs.map(function(song) { return song.queueSongID; }); //'of course' GS wants the queueID instead of a reference
-
-            GS.Services.SWF.moveSongsTo(lastSongs, nextIndex, true);
-            GU.sendMsg(count.toString() + " song"+ ((count > 1) ? "s" : "") +" fetched");
-        }
-        else
-        {
-            //notify the broadcaster that too many songs were selected to play next
-            if (nextIndex == queue.songs.length-count)
-                GU.sendMsg((count == 1)? "That IS the next song." : "Those ARE the next songs");
-            else
-                GU.sendMsg("Too many songs selected");
-        }
-	  },
-  'rules': function()
-    {
-         var rules = GUParams.rules.split(',');
-         for (i=0;i<rules.length;i++)
-         {
-             if(rules[i]!="")
-             				{
-							var msgs = rules[i];
-							setTimeout(function(){GU.sendMsg(msgs);}, 3000);
-							}
-         }
-     }
+    }
 };
 
 actionTable = {
@@ -489,8 +449,6 @@ actionTable = {
     'shuffle':             [[GU.inBroadcast, GU.guestCheck],     GU.shuffle,             '- Shuffle the current queue.'],
     'peek':                [[GU.inBroadcast, GU.whiteListCheck], GU.previewSongs,        '[NUMBER] - Preview the songs that are in the queue.'],
     'guest':               [[GU.inBroadcast, GU.whiteListCheck], GU.guest,               '- Toogle your guest status.'],
-	'fetchLast':           [[GU.inBroadcast, GU.guestCheck],     GU.fetchLast,           '- Bring the last song(s) to the front of the queue.'],
-    'rules':               [[GU.inBroadcast],                    GU.rules,               '- Display Broadcast Rules'],
     'about':               [[GU.inBroadcast],                    GU.about,               '- About this software.']
 };
 
