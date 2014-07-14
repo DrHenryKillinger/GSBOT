@@ -510,7 +510,7 @@ var GU = {
         var playlistUser = "";
         var playlistUserId = "";
         var playlistCount = "";
-        GS.Models.Playlist.get(playlistID ).then(function(p)
+        GS.Models.Playlist.get(playlistID).then(function(p)
         {
             //not run if does not exist
             playlistName = p.get('PlaylistName');
@@ -521,17 +521,15 @@ var GU = {
             //console.log( p.get('UserName'));
             playlistUserId = p.get('UserID');
             //console.log( p.get('UserID'));
-        });
-        if (playlistName != "")
-        {
             var msgUpdate = "Playlist: \"" + playlistName + "\" By: \"" + playlistUser + "\", " + playlistCount + " songs added."
             Grooveshark.addPlaylistByID(playlistID);
-        }
-        else
-        {
+        }, // if it fails...
+        function() {
             msgUpdate = "Unable to find a playlist with ID: \"" + playlistID + "\"."
-        }
-        GU.sendMsg(msgUpdate)
+        })
+        .always(function() { 
+            GU.sendMsg(msgUpdate)
+        });
     },
  'rules': function() //Original Author: davpat, modified to prevent floods.
     {
