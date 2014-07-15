@@ -1,10 +1,10 @@
 {
   "manifest_version": 2,
 
-  "name": "Grooveshark Broadcast Bot",
-  "short_name": "GS Bot",
+  "name": "EGSA Broadcast Bot",
+  "short_name": "EGSA Bot",
   "description": "Create or takeover a broadcast with this bot, then enjoy what the bot can offer!",
-  "version": "1.3.0",
+  "version": "1.0.1",
   "icons": { "16": "icon16.png",
 			"48": "icon48.png",
 			"128": "icon128.png" },

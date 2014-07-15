@@ -30,6 +30,7 @@ var actionTable = {};
 var lastPlay;
 var forcePlay = false;
 var playingRandom = false;
+var followingList = [];
 
 // GroovesharkUtils
 var GU = {
@@ -46,11 +47,9 @@ var GU = {
         var maxMsgLength = 256; // the max number of caracters that can go in the gs chat
         var index = 0;
 
-
-        //msg = '[BOT]: ' + msg;
         while ((Math.floor(msg.length / maxMsgLength) + (msg.length % maxMsgLength != 0)) >= ++index)
         {
-            broadcast.sendChatMessage(msg.substr((index - 1) * maxMsgLength, maxMsgLength));            
+            broadcast.sendChatMessage(msg.substr((index - 1) * maxMsgLength, maxMsgLength));
         }
     },
  'songInQueue': function()
@@ -74,7 +73,7 @@ var GU = {
         var maxDescriptionLength = 145;
     
         var defName = attributes.Description;
-        defName = defName.substr(0, defName.indexOf(GUParams.prefixRename)) + GUParams.prefixRename + ' [EGSA Bot] ';
+        defName = defName.substr(0, defName.indexOf(GUParams.prefixRename)) + GUParams.prefixRename + ' [EGSA-tan] ';
         if (playingRandom)
         {
             defName += 'Playing from collection';
@@ -205,13 +204,25 @@ var GU = {
             GS.Services.SWF.removeSongs([nextSong.queueSongID]);
         }
     },
- 'removeLastSong': function()
+ 'removeLastSong': function(message, numberStr)
     {
         var songs = GS.Services.SWF.getCurrentQueue().songs;
-        var id = songs[songs.length - 1].queueSongID;
-        if (id != GS.Services.SWF.getCurrentQueue().activeSong.queueSongID)
+        var allID = [];
+        var number = Math.floor(Number(numberStr));
+        if (isNaN(number) || number < 1)
+            number = 1;
+        while (--number >= 0)
         {
-            GS.Services.SWF.removeSongs([id]);
+            if (songs.length - 1 - number >= 0)
+            {
+                var id = songs[songs.length - 1 - number].queueSongID;
+                if (id != GS.Services.SWF.getCurrentQueue().activeSong.queueSongID)
+                    allID.push(id);
+            }
+        }
+        if (allID.length > 0)
+        {
+            GS.Services.SWF.removeSongs(allID);
         }
     },
  'getMatchedSongsList': function(stringFilter)
@@ -243,7 +254,7 @@ var GU = {
     },
  'removeByName': function(message, stringFilter)
     {
-        //adding safeguard so that '/removeByName -all' must be typed to clear the queue.
+        //adding safeguard so that '/removeByName allSongs' must be typed to clear the queue.
         if (stringFilter == undefined)
         {
             GU.sendMsg("No songs were removed. Use \"/removeByName allSongs \" to clear the queue.");
@@ -253,8 +264,6 @@ var GU = {
         {
             stringFilter = "";                
         }
-        //else
-        //{
             var listToRemove = GU.getMatchedSongsList(stringFilter);
             var idToRemove = [];
             listToRemove.forEach(function (element)
@@ -263,7 +272,6 @@ var GU = {
             });
             GS.Services.SWF.removeSongs(idToRemove);
             GU.sendMsg('Removed ' + idToRemove.length + ' songs.');
-        //}
     },
  'fetchByName': function(message, stringFilter)
     {
@@ -271,52 +279,65 @@ var GU = {
         if (songToPlay.length > 0)
             GS.Services.SWF.moveSongsTo([songToPlay[0].queueSongID], 1, true);
     },
+ 'fetchLast': function(message, stringFilter)
+    {
+        var songList = GS.Services.SWF.getCurrentQueue().songs;
+        if (songList.length > 2)
+            GS.Services.SWF.moveSongsTo([songList[songList.length - 1].queueSongID], 1, true);
+    },
  'shuffle': function()
     {
         $('.shuffle').click();
         GU.sendMsg('The queue has been shuffled!');
     },
- 'guestCheck': function(current)
+ 'isGuesting': function(userid)
     {
-        if (!current.hasClass('chat-vip'))
+        return GS.getCurrentBroadcast().attributes.vipUsers.some(function(elem){return elem.userID == userid;});
+    },
+ 'guestCheck': function(userid)
+    {
+        if (!GU.isGuesting(userid))
         {
             GU.sendMsg('Only Guests can use that feature, sorry!');
-            return false;
+            return false;        
         }
         return true;    
     },
- 'inListCheck': function(current, list)
+ 'inListCheck': function(userid, list)
     {
-        console.log(current.find('a.favorite').attr('data-user-id'));
-        return list.split(',').indexOf(current.find('a.favorite').attr('data-user-id')) != -1;
+        return list.split(',').indexOf("" + userid) != -1;
     },
- 'followerCheck': function(current)
+ 'followerCheck': function(userid)
     {
-        return (current.find('a.favorite').hasClass('btn-success'));
+        return followingList.indexOf(userid) != -1;
     },
- 'strictWhiteListCheck': function(current)
+ 'strictWhiteListCheck': function(userid)
     {
-        if (GU.inListCheck(current, GUParams.whitelist))
+        if (GU.inListCheck(userid, GUParams.whitelist))
             return true;
         GU.sendMsg('Only user that are explicitly in the whitelist can use this feature, sorry!');
         return false;
     },
- 'whiteListCheck': function(current)
+ 'whiteListCheck': function(userid)
     {
-        if (GU.inListCheck(current, GUParams.whitelist)) // user in whitelist
+        if (GU.inListCheck(userid, GUParams.whitelist)) // user in whitelist
         {
             return true;
         }
-        else if (GUParams.whitelistIncludesFollowing && !GU.inListCheck(current, GUParams.blacklist) && GU.followerCheck(current))
+        else if (GUParams.whitelistIncludesFollowing.toString() === 'true' && !GU.inListCheck(userid, GUParams.blacklist) && GU.followerCheck(userid))
         {
             return true;
         }
         GU.sendMsg('Only ' + GUParams.whiteListName + ' can use that feature, sorry!');        
         return false;
     },
- 'ownerCheck': function(current)
+ 'guestOrWhite': function(userid)
     {
-        if (!current.hasClass('chat-owner'))
+        return (GU.isGuesting(userid) || GU.whiteListCheck(userid));
+    },
+ 'ownerCheck': function(userid)
+    {
+        if (userid != GS.getCurrentBroadcast().attributes.UserID)
         {
             GU.sendMsg('Only the Master can use that feature, sorry!');
             return false;
@@ -325,22 +346,15 @@ var GU = {
     },
  'doParseMessage': function(current)
     {
-        var string = current.find('.message').text();
+        var string = current.data;
         var regexp = RegExp('^/([a-zA-Z]*)([ ]+([a-zA-Z0-9 ]+))?$');
         var regResult = regexp.exec(string);
         if (regResult != null)
         {
             var currentAction = actionTable[regResult[1]];
-            if (currentAction instanceof Array && currentAction[0].every(function(element){return element(current);}))
+            if (currentAction instanceof Array && currentAction[0].every(function(element){return element(current.userID);}))
                 currentAction[1](current, regResult[3]);
         }
-    },
- 'parseMessages': function()
-    {
-        $('.chat-message:not(.parsed)').each(function() {
-            $(this).addClass('parsed');
-            GU.doParseMessage($(this));
-        });
     },
  'forcePlay': function()
     {
@@ -393,26 +407,37 @@ var GU = {
         GU.addSongToHistory();
         if (songleft < 1)
             GU.playRandomSong();
-        GU.parseMessages();
         GU.deletePlayedSong();
         GU.forcePlay();
         /*
             Idea for later:
-            To remove this callback, we can extends both GS.Services.SWF.handleBroadcastChat and GS.Services.SWF.queueChange.
+            To remove this callback, we can extends GS.Services.SWF.queueChange.
         */
     },
  'guest': function(current)
     {
-        var userID = current.find('a.favorite').attr('data-user-id');
+        var userID = current.userID;
         
         if (GS.getCurrentBroadcast().getPermissionsForUserID(userID) != undefined) // is guest
             GS.Services.SWF.broadcastRemoveVIPUser(userID);
         else
             GS.Services.SWF.broadcastAddVIPUser(userID,0,63); // 63 seems to be the permission mask
     },
- 'ping': function()
+ 'makeGuest': function(current, guestID)
     {
-        GU.sendMsg('Pong!');
+        guestID = Number(guestID);
+        if (!isNaN(guestID))
+            GS.Services.SWF.broadcastAddVIPUser(guestID,0,63); // 63 seems to be the permission mask
+    },
+ 'unguestAll': function()
+    {
+        GS.getCurrentBroadcast().attributes.publishersUsersIDs.forEach(function(guestID) {
+            GS.Services.SWF.broadcastRemoveVIPUser(guestID);
+        });
+    },
+ 'ping': function(current)
+    {
+        GU.sendMsg('Ping resp! Oh, and your user ID is ' + current.userID + '!');
     },
  'about': function()
     {
@@ -429,11 +454,11 @@ var GU = {
                 return;
             }
         }
-        var helpMsg = 'Commands:';
+        var helpMsg = 'Command available:';
         Object.keys(actionTable).forEach(function (actionName) {
             helpMsg = helpMsg + ' ' + actionName;
         });
-        helpMsg = helpMsg + ' \| /help [command name] for details.';
+        helpMsg = helpMsg + '. Type /help [command name] for in depth help.';
         GU.sendMsg(helpMsg);
     },
  'startBroadcasting': function(bc)
@@ -461,6 +486,26 @@ var GU = {
         lastPlay = new Date();
         // Check if there are msg in the chat, and process them.
         setInterval(GU.callback, 1000);
+
+        // Overload handlechat
+        var handleBroadcastSaved = GS.Services.SWF.handleBroadcastChat;
+        GS.Services.SWF.handleBroadcastChat = function(e, t){handleBroadcastSaved(e,t);GU.doParseMessage(t);};
+
+    },
+ 'updateFollowing': function()
+    {
+        GS.Services.API.userGetFollowersFollowing().then(
+            function(alluser)
+            {
+                followingList = [];
+                alluser.forEach(function(single)
+                {
+                    if (single.IsFavorite === '1')
+                    {
+                        followingList.push(parseInt(single.UserID));
+                    }
+                });
+            });
     },
  'broadcast': function()
     {
@@ -468,6 +513,7 @@ var GU = {
             alert('Cannot login!');
         else
         {
+            GU.updateFollowing();
             GS.Services.API.getUserLastBroadcast().then(function(bc) {
                 GS.Services.SWF.ready.then(function()
                 {
@@ -477,7 +523,10 @@ var GU = {
             });
         }
     },
- 'fetchLast': function(message, parameter) //@author: Flumble
+/**********************
+    New Code Section
+***********************/
+  'fetchLast': function(message, parameter) //@author: Flumble
     {
         var count     = 1;
         var queue     = GS.Services.SWF.getCurrentQueue();
@@ -503,7 +552,7 @@ var GU = {
                 GU.sendMsg("Too many songs selected");
         }
     },
- 'getPlaylist': function(message, parameter)
+  'getPlaylist': function(message, parameter)
     {
         var playlistID = parameter;
         var playlistName = "";
@@ -515,13 +564,9 @@ var GU = {
         {
             //not run if does not exist
             playlistName = p.get('PlaylistName');
-            //console.log( p.get('PlaylistName'));
             playlistCount = p.get('SongCount');
-            //console.log( p.get('SongCount'));
             playlistUser = p.get('UserName');
-            //console.log( p.get('UserName'));
             playlistUserId = p.get('UserID');
-            //console.log( p.get('UserID'));
             msgUpdate = "Playlist: \"" + playlistName + "\" By: \"" + playlistUser + "\", " + playlistCount + " songs added."
             Grooveshark.addPlaylistByID(playlistID);
         }, // if it fails...
@@ -532,7 +577,7 @@ var GU = {
             GU.sendMsg(msgUpdate)
         });
     },
- 'rules': function() //Original Author: davpat, modified to prevent floods.
+  'rules': function() //Original Author: davpat, modified to prevent floods.
     {
         var ruleslist = GUParams.rules.split(',');
         var msgDelay = 0;
@@ -549,7 +594,7 @@ var GU = {
             }
         }
     },
-'roll' : function(current, parameter)
+  'roll' : function(current, parameter) //Deku
     {
         var userName = current.find('a.user-name.open-profile-card').html();
         var min = 1;
@@ -569,25 +614,28 @@ var GU = {
 
 actionTable = {
     'help':                 [[GU.inBroadcast],                          GU.help,                 '- Display this help.'],
-    'ping':                 [[GU.inBroadcast],                          GU.ping,                 '- Ping the BOT.'],
+    'ping':                 [[GU.inBroadcast],                          GU.ping,                 '- Ping the BOT, also prints your USERID.'],
     'addToCollection':      [[GU.inBroadcast, GU.strictWhiteListCheck], GU.addToCollection,      '- Add this song to the collection.'],
     'removeFromCollection': [[GU.inBroadcast, GU.strictWhiteListCheck], GU.removeFromCollection, '- Remove this song from the collection.'],
     'removeNext':           [[GU.inBroadcast, GU.guestCheck],           GU.removeNextSong,       '- Remove the next song in the queue.'],
-    'removeLast':           [[GU.inBroadcast, GU.guestCheck],           GU.removeLastSong,       '- Remove the last song of the queue.'],
+    'removeLast':           [[GU.inBroadcast, GU.guestCheck],           GU.removeLastSong,       '[NUMBER] - Remove the last song of the queue.'],
     'fetchByName':          [[GU.inBroadcast, GU.guestCheck],           GU.fetchByName,          '[FILTER] - Place the first song of the queue that matches FILTER at the beginning of the queue.'],
-    'fetchLast':            [[GU.inBroadcast, GU.guestCheck],           GU.fetchLast,            '- Bring the last song(s) to the front of the queue.'],
+    'fetchLast':            [[GU.inBroadcast, GU.guestCheck],           GU.fetchLast,            '- Bring the last song at the beginning of the queue.'],
     'previewRemoveByName':  [[GU.inBroadcast, GU.guestCheck],           GU.previewRemoveByName,  '[FILTER] - Get the list of songs that will be remove when calling \'removeByName\' with the same FILTER.'],
     'removeByName':         [[GU.inBroadcast, GU.guestCheck],           GU.removeByName,         '[FILTER] - Remove all songs that matches the filter. To clear queue use \'/removeByName allSongs\'. Use the \'previewRemoveByName\' first.'],
     'showPlaylist':         [[GU.inBroadcast, GU.guestCheck],           GU.showPlaylist,         '[FILTER] - Get the ID of a particular playlist.'],
     'playPlaylist':         [[GU.inBroadcast, GU.guestCheck],           GU.playPlaylist,         'PLAYLISTID - Play the playlist from the ID given by \'showPlaylist\'.'],
     'skip':                 [[GU.inBroadcast, GU.guestCheck],           GU.skip,                 '- Skip the current song.'],
     'shuffle':              [[GU.inBroadcast, GU.guestCheck],           GU.shuffle,              '- Shuffle the current queue.'],
-    'peek':                 [[GU.inBroadcast, GU.whiteListCheck],       GU.previewSongs,         '[NUMBER] - Preview the songs that are in the queue.'],
-    'guest':                [[GU.inBroadcast, GU.whiteListCheck],       GU.guest,                '- Toogle your guest status.'],
+    'peek':                 [[GU.inBroadcast, GU.guestOrWhite],         GU.previewSongs,         '[NUMBER] - Preview the songs that are in the queue.'],
+    'guest':                [[GU.inBroadcast, GU.guestOrWhite],         GU.guest,                '- Toogle your guest status.'],
+    'makeGuest':            [[GU.inBroadcast, GU.strictWhiteListCheck], GU.makeGuest,            'USERID - Force-guest a user with its ID.'],
+    'unguestAll':           [[GU.inBroadcast, GU.strictWhiteListCheck], GU.unguestAll,           '- Unguest everyone.'],
+    'about':                [[GU.inBroadcast],                          GU.about,                '- About this software.'],
     'rules':                [[GU.inBroadcast],                          GU.rules,                '- Rules of the broadcast'],
     'getPlaylist':          [[GU.inBroadcast, GU.guestCheck],           GU.getPlaylist,          '[NUMBER] - Universal Playlist Loader. Usage: /getPlaylist [Playlist ID], see: http://goo.gl/46OwkC'],
-    'about':                [[GU.inBroadcast],                          GU.about,                '- About this software.'],
     'roll':                 [[GU.inBroadcast],                          GU.roll,                 '- Test your luck throwing the magical dice. If no parameter is given, the dice will roll from 1-100']
+
 };
 
 (function()
