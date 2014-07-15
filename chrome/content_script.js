@@ -510,6 +510,7 @@ var GU = {
         var playlistUser = "";
         var playlistUserId = "";
         var playlistCount = "";
+        var msgUpdate = "";
         GS.Models.Playlist.get(playlistID).then(function(p)
         {
             //not run if does not exist
@@ -521,7 +522,7 @@ var GU = {
             //console.log( p.get('UserName'));
             playlistUserId = p.get('UserID');
             //console.log( p.get('UserID'));
-            var msgUpdate = "Playlist: \"" + playlistName + "\" By: \"" + playlistUser + "\", " + playlistCount + " songs added."
+            msgUpdate = "Playlist: \"" + playlistName + "\" By: \"" + playlistUser + "\", " + playlistCount + " songs added."
             Grooveshark.addPlaylistByID(playlistID);
         }, // if it fails...
         function() {
@@ -547,6 +548,22 @@ var GU = {
                 loopTick = loopTick + 1;
             }
         }
+    },
+'roll' : function(current, parameter)
+    {
+        var userName = current.find('a.user-name.open-profile-card').html();
+        var min = 1;
+        var max = 100;
+
+        if (parameter != undefined) {
+            parameter = parameter.split(" ");
+            max = parseInt(parameter[0]) ? parameter[0] : 100;
+        }
+
+        var roll = Math.floor(Math.random() * (max - min)) + min;
+
+        GU.sendMsg("[Roll] EGSA-tan summons a magical dice with numbers from " + min + " to " + max + " ...");
+        GU.sendMsg("[Roll] " + userName + " throws the magical dice and gets a " + roll);
     }
 };
 
@@ -569,7 +586,8 @@ actionTable = {
     'guest':                [[GU.inBroadcast, GU.whiteListCheck],       GU.guest,                '- Toogle your guest status.'],
     'rules':                [[GU.inBroadcast],                          GU.rules,                '- Rules of the broadcast'],
     'getPlaylist':          [[GU.inBroadcast, GU.guestCheck],           GU.getPlaylist,          '[NUMBER] - Universal Playlist Loader. Usage: /getPlaylist [Playlist ID], see: http://goo.gl/46OwkC'],
-    'about':                [[GU.inBroadcast],                          GU.about,                '- About this software.']
+    'about':                [[GU.inBroadcast],                          GU.about,                '- About this software.'],
+    'roll':                 [[GU.inBroadcast],                          GU.roll,                 '- Test your luck throwing the magical dice. If no parameter is given, the dice will roll from 1-100']
 };
 
 (function()
