@@ -11,6 +11,8 @@ The EGSA Broadcast Bot (EGSA Bot) is designed to run a collaborative broadcast h
 This bot has specifically been modified for use by EGSA (http://egsa.github.io) so it may not be exactly what you want.
 We have added several features and tweaks that we find useful or fun.
 
+***As of now the only part being edited is the chrome extension***
+
 Featuring
 ---------
 
