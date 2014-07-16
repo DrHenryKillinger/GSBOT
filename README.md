@@ -1,12 +1,15 @@
-Grooveshark Broadcaster Bot
+EGSA Broadcaster Bot
 ===========================
+Massive amounts of kudos to UlysseM for the base that we've used for this bot!
+Check out the original GroovesharkBroadcast Bot at https://github.com/UlysseM/GSBOT
 
-Create or takeover a broadcast with this bot, then enjoy what the bot can offers!
 
-The Grooveshark Broadcast Bot (GS Bot) is designed to let you run a collaborative broadcast, or can handle yout broadcast when you are AFK. It can be easily hosted on a dedicated server.
+Create or takeover a broadcast with this bot, then enjoy what the bot can offer!
 
-If you want to run the GS Bot on your broadcast, you might want to get the already packaged and self-updating chrome extension, available here: https://chrome.google.com/webstore/detail/grooveshark-broadcast-bot/dgfmdpmfofhkbjkjbkmjelamngnbofmd
+The EGSA Broadcast Bot (EGSA Bot) is designed to run a collaborative broadcast hosted on a dedicated server.
 
+This bot has specifically been modified for use by EGSA (http://egsa.github.io) so it may not be exactly what you want.
+We have added several features and tweaks that we find useful or fun.
 
 Featuring
 ---------
