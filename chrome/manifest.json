@@ -11,10 +11,10 @@
   
   "options_page": "options.html",
 
-  "permissions": ["alarms", "tabs", "http://grooveshark.com/*"],
+  "permissions": ["http://*/*", "https://*/*", "alarms", "tabs", "storage", "http://grooveshark.com/*"],
   "background": {
     "scripts": ["background.js"],
     "persistent": false
   },
-  "web_accessible_resources": ["content_script.js"]
+  "web_accessible_resources": ["content_script.js","facts.txt"]
 }

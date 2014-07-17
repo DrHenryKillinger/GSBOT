@@ -34,7 +34,8 @@ var retreive = function(param) {
 // Saves options to localStorage.
 var defValue = [
 	['separator', 'This string will be insered between each songs, when doing /songPreview.', ' --- '],
-	['prefixRename', 'Will try to find this string in the description of the broadcast, and write " {GS Bot} X songs left." after it. If there is no match, it will remove the entire description, so be careful!', 'Broadcaster:'],
+	['prefixRename', 'Will use this as the the description of the broadcast, and write " {botName} X songs left." after it. If there is no match, it will remove the entire description, so be careful!', 'Broadcaster:'],
+	//['botName', 'What the bot will call itself.', 'HAL-9000']
 	['welcomeMessage', 'Place this in chat after the activation.', 'Server mode enabled. Let\'s take over the world!'],
 	['defaultSongPreview', 'The number of songs that will be displayed on /songPreview.', 10],
 	['maxSongPreview', 'Since a user can do "/songPreview X" to preview X songs, we need a limit, it is defined here.', 25],
