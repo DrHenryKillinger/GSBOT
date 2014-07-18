@@ -52,6 +52,7 @@ var injectCode = function(tabId)
 		+ 'GUParams.userReq = ' + JSON.stringify(regexRes[1] != undefined ? '' : (regexRes[3] != undefined ? regexRes[3] : localStorage.forceLoginUsername)) + ';'
 		+ 'GUParams.passReq = ' + JSON.stringify(regexRes[1] != undefined ? '' : (regexRes[5] != undefined ? regexRes[5] : localStorage.forceLoginPassword)) + ';'
 		+ 'GUParams.version = ' + JSON.stringify(chrome.app.getDetails().version) + ';'
+		+ 'GUParams.extensionId = ' + JSON.stringify(chrome.runtime.id) + ';'
 		) + ';'
 	+ "document.body.appendChild(document.createElement('script')).src='"
 	+ chrome.extension.getURL("content_script.js") +"';";

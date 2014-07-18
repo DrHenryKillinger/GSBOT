@@ -564,7 +564,7 @@ var GU = {
     'fact': function() {
         var textHTTP;
         var textFile = '/facts.txt';
-        textHTTP=new XMLHttpRequest();
+        textHTTP = new XMLHttpRequest();
         textHTTP.onreadystatechange=function(){
             if (textHTTP.readyState==4 && textHTTP.status==200){
                 console.log(textHTTP.responseText);
@@ -574,7 +574,7 @@ var GU = {
                     GU.sendMsg(randomLine);
             }
         }
-        textHTTP.open('GET', textFile, true);
+        textHTTP.open('GET', 'chrome-extension://' + GUParams.extensionId + textFile, true);
         textHTTP.send();
     }
 };
