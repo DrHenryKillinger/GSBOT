@@ -567,7 +567,7 @@ var GU = {
         textHTTP = new XMLHttpRequest();
         textHTTP.onreadystatechange=function(){
             if (textHTTP.readyState==4 && textHTTP.status==200){
-                console.log(textHTTP.responseText);
+                //console.log(textHTTP.responseText);
                 var fileContentLines = textHTTP.responseText.split('\n');
                     var randomLineIndex = Math.floor(Math.random() * fileContentLines.length);
                     var randomLine = fileContentLines[randomLineIndex];
