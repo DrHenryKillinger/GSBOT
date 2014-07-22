@@ -563,7 +563,7 @@ var GU = {
     },
     'fact': function() {
         var textHTTP;
-        var textFile = '/facts.txt';
+        var textFile = 'data/facts.txt';
         textHTTP = new XMLHttpRequest();
         textHTTP.onreadystatechange=function(){
             if (textHTTP.readyState==4 && textHTTP.status==200){
@@ -576,6 +576,14 @@ var GU = {
         }
         textHTTP.open('GET', 'chrome-extension://' + GUParams.extensionId + textFile, true);
         textHTTP.send();
+    },
+    'whoamI': function(current){
+        var uID = current.userID;
+        var uName = '';
+        GS.Models.User.get(uID).then(function(u){
+            uName = u.get('Name');
+        })
+        GU.sendMsg('You are:' + uName + '. Your ID is: ' + uID + '.');
     }
 };
 
@@ -584,7 +592,10 @@ actionTable = {
         [GU.inBroadcast], GU.help, '- Display this help.'
     ],
     'ping': [
-        [GU.inBroadcast], GU.ping, '- Ping the BOT, also prints your USERID.'
+        [GU.inBroadcast], GU.ping, '- Ping the BOT.'
+    ],
+    'whoamI': [
+        [GU.inBroadcast], GU.whoamI, '- Return User Name & ID.'
     ],
     'addToCollection': [
         [GU.inBroadcast, GU.strictWhiteListCheck], GU.addToCollection, '- Add this song to the collection.'
