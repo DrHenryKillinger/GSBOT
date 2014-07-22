@@ -563,7 +563,7 @@ var GU = {
     },
     'fact': function() {
         var textHTTP;
-        var textFile = 'data/facts.txt';
+        var textFile = '/data/facts.txt';
         textHTTP = new XMLHttpRequest();
         textHTTP.onreadystatechange=function(){
             if (textHTTP.readyState==4 && textHTTP.status==200){
