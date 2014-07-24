@@ -236,8 +236,13 @@ var GU = {
     },
     'fetchByName': function(message, stringFilter) {
         var songToPlay = GU.getMatchedSongsList(stringFilter);
-        if (songToPlay.length > 0)
+        if (songToPlay.length > 0) {
             GS.Services.SWF.moveSongsTo([songToPlay[0].queueSongID], 1, true);
+            var sName = songToPlay[0].SongName;
+            GU.sendMsg("Fetched \"" + sName +"\".");
+        } else {
+            GU.sendMsg("Unable to find song title matching: \"" + stringFilter + "\".");
+        }
     },
     'fetchLast': function(message, stringFilter) {
         var songList = GS.Services.SWF.getCurrentQueue().songs;
@@ -551,7 +556,7 @@ var GU = {
         var min = 1;
         var max = 100;
 
-        if (parameter != undefined) {
+        if (parameter == undefined) {
             parameter = parameter.split(" ");
             max = parseInt(parameter[0]) ? parameter[0] : 100;
         }
@@ -559,12 +564,15 @@ var GU = {
             GU.sendMsg("How do you expect me to roll " + parameter + "?");
             return;
         } else {
-            if (parameter > 2 || parameter < 1001) {
+
+            var number = parseInt(parameter);
+            max = number;
+            if (number > 2 && number < 1001) {
                 var roll = Math.floor(Math.random() * (max - min)) + min;
                 GU.sendMsg("[Roll] EGSA-tan summons a magical dice with numbers from " + min + " to " + max + " ...");
                 GU.sendMsg("[Roll] " + uName + " throws the magical dice and gets a " + roll);
             } else {
-                if (parameter == 2) {
+                if (number == 2) {
                     var flip = Math.floor(Math.random() * (max - min)) + min;
                     var coin = "";
                     switch (flip) {
@@ -577,17 +585,19 @@ var GU = {
                     }
                     GU.sendMsg("[Roll] EGSA-tan flips a coin.");
                     GU.sendMsg("[Roll] The coin lands on " + coin + "!");
-                } else if (parameter == 1) {
+                } else if (number == 1) {
                     GU.sendMsg("A one sided die? Really? ok....");
                     GU.sendMsg("[Roll] " + uName + " rolled a 1.. are you happy now?");
                 }
-                if (parameter > 1000) {
-                    GU.sendMsg("I am sorry, I don't have enough power to summon a " + parameter + " sided die.");
+                if (number > 1000) {
+                    GU.sendMsg("I am sorry, I don't have enough power to summon a " + number + " sided die.");
+                }
+                if (number < 1) {
+                    GU.sendMsg("I am sorry, but it is impossible to create an object with fewer than 2 sides.");
                 }
             }
         }
-    }
-},
+    },
     'fact': function() {
         var textHTTP;
         var textFile = '/data/facts.txt';
