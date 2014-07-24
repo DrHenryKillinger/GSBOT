@@ -545,7 +545,7 @@ var GU = {
     {
         var uName = "";
         var uID = current.userID;
-        GS.Models.User.get(uID).then(function(u){
+        GS.Models.User.get(uID).then(function(u) {
             uName = u.get('Name');
         })
         var min = 1;
@@ -555,12 +555,39 @@ var GU = {
             parameter = parameter.split(" ");
             max = parseInt(parameter[0]) ? parameter[0] : 100;
         }
-
-        var roll = Math.floor(Math.random() * (max - min)) + min;
-
-        GU.sendMsg("[Roll] EGSA-tan summons a magical dice with numbers from " + min + " to " + max + " ...");
-        GU.sendMsg("[Roll] " + uName + " throws the magical dice and gets a " + roll);
-    },
+        if (isNaN(parameter)) {
+            GU.sendMsg("How do you expect me to roll " + parameter + "?");
+            return;
+        } else {
+            if (parameter > 2 || parameter < 1001) {
+                var roll = Math.floor(Math.random() * (max - min)) + min;
+                GU.sendMsg("[Roll] EGSA-tan summons a magical dice with numbers from " + min + " to " + max + " ...");
+                GU.sendMsg("[Roll] " + uName + " throws the magical dice and gets a " + roll);
+            } else {
+                if (parameter == 2) {
+                    var flip = Math.floor(Math.random() * (max - min)) + min;
+                    var coin = "";
+                    switch (flip) {
+                        case 1:
+                            coin = "Heads";
+                            break;
+                        case 2:
+                            coin = "Tails";
+                            break;
+                    }
+                    GU.sendMsg("[Roll] EGSA-tan flips a coin.");
+                    GU.sendMsg("[Roll] The coin lands on " + coin + "!");
+                } else if (parameter == 1) {
+                    GU.sendMsg("A one sided die? Really? ok....");
+                    GU.sendMsg("[Roll] " + uName + " rolled a 1.. are you happy now?");
+                }
+                if (parameter > 1000) {
+                    GU.sendMsg("I am sorry, I don't have enough power to summon a " + parameter + " sided die.");
+                }
+            }
+        }
+    }
+},
     'fact': function() {
         var textHTTP;
         var textFile = '/data/facts.txt';
