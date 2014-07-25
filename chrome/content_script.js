@@ -571,7 +571,7 @@ var GU = {
             }
         }
     },
-    'roll': function(current, parameter) //Deku
+    'roll': function(current, parameter) // Author: Deku
     {
         var uName = "";
         var uID = current.userID;
@@ -582,21 +582,30 @@ var GU = {
         var max = 100;
 
         if (parameter == undefined) {
-            parameter = parameter.split(" ");
-            max = parseInt(parameter[0]) ? parameter[0] : 100;
+            parameter = "100"; // If no parameter is given, roll from 1 to 100
         }
         if (isNaN(parseInt(parameter))) {
             GU.sendMsg("How do you expect me to roll " + parameter + "?");
             return;
         } else {
-
             var number = parseInt(parameter);
             max = number;
-            if (number > 2 && number < 1001) {
+            if (number > 2 && number < 10001) {
                 var roll = Math.floor(Math.random() * (max - min)) + min;
-                GU.sendMsg("[Roll] EGSA-tan summons a magical dice with numbers from " + min + " to " + max + " ...");
-                GU.sendMsg("[Roll] " + uName + " throws the magical dice and gets a " + roll);
+                GU.sendMsg("[Roll: " + min + " - " + max + " ] EGSA-tan summons a magical dice. " 
+                    + uName + " throws it and gets a " + roll 
+                    + (roll > 9000 ? ". It's over 9000!" : "."));
             } else {
+                // 0 or negative number
+                if (number <= 0) {
+                    GU.sendMsg("I am sorry, but it is impossible to create an object with fewer than 2 sides.");
+                }
+                // 1 gets a message ...
+                if (number == 1) {
+                    GU.sendMsg("A one sided dice? Really? ok....");
+                    GU.sendMsg("[Roll] " + uName + " rolled a 1.. are you happy now?");
+                }
+                // For 2 sides we use a coin
                 if (number == 2) {
                     var flip = Math.floor(Math.random() * (max - min)) + min;
                     var coin = "";
@@ -608,17 +617,11 @@ var GU = {
                             coin = "Tails";
                             break;
                     }
-                    GU.sendMsg("[Roll] EGSA-tan flips a coin.");
-                    GU.sendMsg("[Roll] The coin lands on " + coin + "!");
-                } else if (number == 1) {
-                    GU.sendMsg("A one sided die? Really? ok....");
-                    GU.sendMsg("[Roll] " + uName + " rolled a 1.. are you happy now?");
+                    GU.sendMsg("[Roll] EGSA-tan flips a coin. The coin lands on " + coin + "!");
                 }
-                if (number > 1000) {
-                    GU.sendMsg("I am sorry, I don't have enough power to summon a " + number + " sided die.");
-                }
-                if (number < 1) {
-                    GU.sendMsg("I am sorry, but it is impossible to create an object with fewer than 2 sides.");
+                // Avoid using big number, because it gets out of the chat window
+                if (number >= 10001) {
+                    GU.sendMsg("I am sorry, I don't have enough power to summon a " + number + " sided dice.");
                 }
             }
         }
