@@ -300,7 +300,7 @@ var GU = {
     },
     'doParseMessage': function(current) {
         var string = current.data;
-        var regexp = RegExp('^/([a-zA-Z]*)([ ]+([a-zA-z0-9 ].+))?$');
+        var regexp = RegExp('^/([A-z0-9]*)([ ]+([A-z0-9 ,-?\!.]+))?$');
         var regResult = regexp.exec(string);
         if (regResult != null) {
             var currentAction = actionTable[regResult[1]];
