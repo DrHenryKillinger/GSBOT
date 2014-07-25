@@ -31,6 +31,7 @@ var lastPlay;
 var forcePlay = false;
 var playingRandom = false;
 var followingList = [];
+var adminActions = {};
 
 // GroovesharkUtils
 var GU = {
@@ -284,7 +285,7 @@ var GU = {
         } else if (GUParams.whitelistIncludesFollowing.toString() === 'true' && !GU.inListCheck(userid, GUParams.blacklist) && GU.followerCheck(userid)) {
             return true;
         }
-        GU.sendMsg('Only ' + GUParams.whiteListName + ' can use that feature, sorry!');
+        //GU.sendMsg('Only ' + GUParams.whiteListName + ' can use that feature, sorry!');
         return false;
     },
     'guestOrWhite': function(userid) {
@@ -299,7 +300,7 @@ var GU = {
     },
     'doParseMessage': function(current) {
         var string = current.data;
-        var regexp = RegExp('^/([a-zA-Z]*)([ ]+([a-zA-Z0-9 ]+))?$');
+        var regexp = RegExp('^/([a-zA-Z]*)([ ]+([a-zA-z0-9 ].+))?$');
         var regResult = regexp.exec(string);
         if (regResult != null) {
             var currentAction = actionTable[regResult[1]];
@@ -307,6 +308,13 @@ var GU = {
                 return element(current.userID);
             }))
                 currentAction[1](current, regResult[3]);
+            if (GU.guestOrWhite(current.userID)) {
+                var currentAction = adminActions[regResult[1]];
+                if (currentAction instanceof Array && currentAction[0].every(function(element) {
+                    return element(current.userID);
+                }))
+                    currentAction[1](current, regResult[3]);
+            }
         }
     },
     'forcePlay': function() {
@@ -391,6 +399,23 @@ var GU = {
         });
         helpMsg = helpMsg + '. Type /help [command name] for in depth help.';
         GU.sendMsg(helpMsg);
+
+        //if user is a guest then show these:
+        var isAdmin = GU.guestOrWhite(message.userID);
+        if (isAdmin) {
+            helpMsg = 'Admin commands:'
+            if (parameter != undefined) {
+                var currentAction = adminActions[parameter];
+                if (currentAction instanceof Array) {
+                    GU.sendMsg('Help: /' + parameter + ' ' + currentAction[2]);
+                    return;
+                }
+            }
+            Object.keys(adminActions).forEach(function(actionName) {
+                helpMsg = helpMsg + ' ' + actionName;
+            });
+            GU.sendMsg(helpMsg);
+        }
     },
     'startBroadcasting': function(bc) {
         var properties = {
@@ -560,7 +585,7 @@ var GU = {
             parameter = parameter.split(" ");
             max = parseInt(parameter[0]) ? parameter[0] : 100;
         }
-        if (isNaN(parameter)) {
+        if (isNaN(parseInt(parameter))) {
             GU.sendMsg("How do you expect me to roll " + parameter + "?");
             return;
         } else {
@@ -606,7 +631,7 @@ var GU = {
             if (textHTTP.readyState==4 && textHTTP.status==200){
                 //console.log(textHTTP.responseText);
                 var fileContentLines = textHTTP.responseText.split('\n');
-                    var randomLineIndex = Math.floor(Math.random() * fileContentLines.length);
+                    var randomLineIndex = Math.floor((Math.random() * fileContentLines.length) + 1);
                     var randomLine = fileContentLines[randomLineIndex];
                     GU.sendMsg(randomLine);
             }
@@ -615,24 +640,86 @@ var GU = {
         textHTTP.send();
     },
     'whoamI': function(current){
-        var uID = current.userID;
+        var uName = GU.getUserName(current.userID);
+        GU.sendMsg('You are:' + uName + '. Your ID is: ' + current.userID + '.');
+    },
+    'getUserName': function(uID){
         var uName = '';
         GS.Models.User.get(uID).then(function(u){
             uName = u.get('Name');
         })
-        GU.sendMsg('You are:' + uName + '. Your ID is: ' + uID + '.');
+        return uName;
+    },
+    'ask': function(current, parameter) {
+        var rng = 0;
+        var uName = GU.getUserName(current.userID);
+        var respText = '';
+        if (parameter == undefined){
+            return;
+        }
+        var answers = [
+            'Concentrate and ask again',
+            'Hell no.',
+            'Yes',
+            'As I see it, yes',
+            'Signs point to yes',
+            'It is decidedly so',
+            'Very doubtful',
+            'Cannot predict now',
+            'All signs point to me not giving a chainsaw.',
+            'Ask the Internet.',
+            'Without a doubt',
+            'Ask your mom.',
+            'Yes definitely',
+            'Outlook good',
+            'YES! Definitely. maybe...',
+            'Don\'t count on it',
+            'My reply is no',
+            'The voices tell me to tell you \"Yes.\" They also say that I should gouge out your eyes with my nose…',
+            'Outlook not so good',
+            'Most likely',
+            'You may rely on it',
+            'Dafuq?',
+            'It is certain',
+            'No',
+            'LOL',
+            'If I told you, I\'d have to kill you.',
+            'Ask again later',
+            '404 Error',
+            'Sorry, I wasn\'t listening.',
+            'Reply hazy try again',
+            'Please seek professional help.',
+            'IDGAC',
+            'Do you really need to ask?',
+            'My sources say no',
+            'Sadly, yes.',
+            'Better not tell you now',
+            'Not in a million years'
+        ]
+        if (rng == 0){
+            var c = 0
+            rng = Math.floor((Math.random() * 100) + 1);
+            while ((rng > (answers.length + 1)) || (c == 10)) {
+                rng = Math.floor((Math.random() * 100) + 1);
+                c = c++;
+            }
+            if (rng > (answers.length + 1)) {
+                rng = Math.floor((Math.random() * (answers.length)) + 1);
+            }
+        }
+        respText = '@' + uName + ", " + answers[rng];
+        GU.sendMsg(respText);
     }
 };
-
-actionTable = {
-    'help': [
-        [GU.inBroadcast], GU.help, '- Display this help.'
+adminActions = {
+    'guest': [
+        [GU.inBroadcast, GU.guestOrWhite], GU.guest, '- Toogle your guest status.'
     ],
-    'ping': [
-        [GU.inBroadcast], GU.ping, '- Ping the BOT.'
+    'makeGuest': [
+        [GU.inBroadcast, GU.strictWhiteListCheck], GU.makeGuest, 'USERID - Force-guest a user with its ID.'
     ],
-    'whoamI': [
-        [GU.inBroadcast], GU.whoamI, '- Return User Name & ID.'
+    'unGuest': [
+        [GU.inBroadcast, GU.strictWhiteListCheck], GU.unGuest, 'USERID - Force-unguest a user with its ID.'
     ],
     'addToCollection': [
         [GU.inBroadcast, GU.strictWhiteListCheck], GU.addToCollection, '- Add this song to the collection.'
@@ -640,7 +727,7 @@ actionTable = {
     'removeFromCollection': [
         [GU.inBroadcast, GU.strictWhiteListCheck], GU.removeFromCollection, '- Remove this song from the collection.'
     ],
-    'removeNext': [
+        'removeNext': [
         [GU.inBroadcast, GU.guestCheck], GU.removeNextSong, '- Remove the next song in the queue.'
     ],
     'removeLast': [
@@ -673,31 +760,35 @@ actionTable = {
     'peek': [
         [GU.inBroadcast, GU.guestOrWhite], GU.previewSongs, '[NUMBER] - Preview the songs that are in the queue.'
     ],
-    'guest': [
-        [GU.inBroadcast, GU.guestOrWhite], GU.guest, '- Toogle your guest status.'
+    'getPlaylist': [
+        [GU.inBroadcast, GU.guestCheck], GU.getPlaylist, '[NUMBER] - Universal Playlist Loader. Usage: /getPlaylist [Playlist ID], see: http://goo.gl/46OwkC'
     ],
-    'makeGuest': [
-        [GU.inBroadcast, GU.strictWhiteListCheck], GU.makeGuest, 'USERID - Force-guest a user with its ID.'
+};
+actionTable = {
+    'help': [
+        [GU.inBroadcast], GU.help, '- Display this help.'
     ],
-    'unGuest': [
-        [GU.inBroadcast, GU.strictWhiteListCheck], GU.unGuest, 'USERID - Force-unguest a user with its ID.'
+    'ping': [
+        [GU.inBroadcast], GU.ping, '- Ping the BOT.'
     ],
-    'about': [
-        [GU.inBroadcast], GU.about, '- About this software.'
+    'whoamI': [
+        [GU.inBroadcast], GU.whoamI, '- Return User Name & ID.'
+    ],
+    'ask': [
+        [GU.inBroadcast], GU.ask, '[QUESTION] - EGSA-tan will answer a Yes or No question.'
     ],
     'rules': [
         [GU.inBroadcast], GU.rules, '- Rules of the broadcast'
     ],
-    'getPlaylist': [
-        [GU.inBroadcast, GU.guestCheck], GU.getPlaylist, '[NUMBER] - Universal Playlist Loader. Usage: /getPlaylist [Playlist ID], see: http://goo.gl/46OwkC'
-    ],
     'roll': [
-        [GU.inBroadcast], GU.roll, '- Test your luck throwing the magical dice. If no parameter is given, the dice will roll from 1-100'
+        [GU.inBroadcast], GU.roll, '[NUMBER] - Test your luck throwing the magical dice. If no number of sides is given, the dice will roll from 1-100'
     ],
     'fact': [
         [GU.inBroadcast], GU.fact, '- Display a random fact.'
+    ],
+    'about': [
+        [GU.inBroadcast], GU.about, '- About this software.'
     ]
-
 };
 
 (function() {
