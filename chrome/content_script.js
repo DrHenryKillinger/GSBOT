@@ -298,6 +298,17 @@ var GU = {
         }
         return true;
     },
+    'isListening': function(user){
+        if (isNaN(user)) {
+            return GS.getCurrentBroadcast().attributes.listeners.models.some(function(elem) {
+                return elem.attributes.Name == user;
+            });
+        } else {
+            return GS.getCurrentBroadcast().attributes.listeners.models.some(function(elem) {
+                return elem.attributes.UserID == user;
+            });
+        }
+    },
     'doParseMessage': function(current) {
         var string = current.data;
         var regexp = RegExp('^/([A-z0-9]*)([ ]+([A-z0-9 ,-?\!.]+))?$');
@@ -591,7 +602,7 @@ var GU = {
             var number = parseInt(parameter);
             max = number;
             if (number > 2 && number < 10001) {
-                var roll = Math.floor(Math.random() * (max - min)) + min;
+                var roll = Math.floor(Math.random() * max) + min;
                 GU.sendMsg("[Roll: " + min + " - " + max + " ] EGSA-tan summons a magical dice. " 
                     + uName + " throws it and gets a " + roll 
                     + (roll > 9000 ? ". It's over 9000!" : "."));
@@ -607,7 +618,7 @@ var GU = {
                 }
                 // For 2 sides we use a coin
                 if (number == 2) {
-                    var flip = Math.floor(Math.random() * (max - min)) + min;
+                    var flip = Math.floor(Math.random() * max) + min;
                     var coin = "";
                     switch (flip) {
                         case 1:
@@ -712,7 +723,59 @@ var GU = {
         }
         respText = '@' + uName + ", " + answers[rng];
         GU.sendMsg(respText);
-    }
+    },
+    'cast': function(current, parameter) {
+        if (parameter == undefined) {
+            GU.sendMsg('Puff!! Nothing happened.');
+            return;
+        }
+
+        var caster = GU.getUserName(current.userID);
+        parameter = parameter.split(' ');
+        var toCast = parameter[0];
+        var target = parameter[1];
+
+        var spells = {
+            'frostbolt' : {
+                'name': 'Frostbolt',
+                'minDmg': 40,
+                'maxDmg': 50
+            },
+            'fireball': {
+                'name': 'Fireball',
+                'minDmg': 30,
+                'maxDmg': 70
+            },
+            'dongerstrike': {
+                'name': 'Donger Strike',
+                'minDmg': 30,
+                'maxDmg': 90
+            }
+        }
+
+        var castedSpell = spells[toCast];
+        if (castedSpell == undefined) {
+            GU.sendMsg('Spell not found. Are you sure that you know magic?');
+            return;
+        }
+
+        var damageDone = Math.floor(Math.random() * (castedSpell['maxDmg'] - castedSpell['minDmg'])) + castedSpell['minDmg'];
+        var isCrit = Math.random() > 0.9; // 10% crit chance
+
+        if (isCrit) {
+            damageDone *= 2;
+        }
+
+        if (target == undefined || target == caster) {
+            GU.sendMsg(caster + ' tries to cast ' + castedSpell['name'] + ', but the spell fails and lands on himself, dealing '+ damageDone + ' damage.' + (isCrit ? ' Critical strike!' : '') + (damageDone > 100 ? ' REKT!' : ''));
+        } else {
+            if (GU.isListening(target)){
+                GU.sendMsg(caster +' casts ' + castedSpell['name'] + ' over ' + target + ' dealing ' + damageDone + ' damage.' + (isCrit ? ' Critical strike!' : '') + (damageDone > 100 ? ' Overkill!' : ''));
+            } else {
+                GU.sendMsg(caster +' casts ' + castedSpell['name'] + ' over ... wait ... where is ' + target + '? (Help: The user must be in chat and the name must be written exactly.)');
+            }
+        }
+    } 
 };
 adminActions = {
     'guest': [
@@ -788,6 +851,9 @@ actionTable = {
     ],
     'fact': [
         [GU.inBroadcast], GU.fact, '- Display a random fact.'
+    ],
+    'cast': [
+        [GU.inBroadcast], GU.cast, '[SPELL] [TARGET]- (Work In Progress) Simple roleplaying command. Current spells are: frostbolt, fireball and dongerstrike.'
     ],
     'about': [
         [GU.inBroadcast], GU.about, '- About this software.'
