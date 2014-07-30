@@ -22,7 +22,6 @@
  *  SOFTWARE.
  *
  */
-// ID: abioncnjcacdmnichbdcjbanljjgjpgc
 var songleft;
 var allSongsId = [];
 var lastPlayedSongs = [];
@@ -32,33 +31,234 @@ var forcePlay = false;
 var playingRandom = false;
 var followingList = [];
 var adminActions = {};
+var rng;
 
 // GroovesharkUtils
 var GU = {
+/*  ##################
+    Backend Functions
+    ##################*/
+    'addSongToHistory': function() {
+        if (Grooveshark.getCurrentSongStatus().song == null)
+            return;
+        var currSongID = Grooveshark.getCurrentSongStatus().song.songID;
+        if (lastPlayedSongs.length == 0 || lastPlayedSongs[lastPlayedSongs.length - 1] != currSongID) {
+            var posToRemove = lastPlayedSongs.indexOf(currSongID);
+            // Remove the song in the list
+            if (posToRemove != -1)
+                lastPlayedSongs.splice(posToRemove, 1);
+            lastPlayedSongs.push(currSongID);
+            // Remove the oldest song in the list if it goes over the limit.
+            if (GUParams.historyLength < lastPlayedSongs.length)
+                lastPlayedSongs.shift();
+        }
+    },
+    'broadcast': function() {
+        if (GS.getLoggedInUserID() <= 0)
+            alert('Cannot login!');
+        else {
+            GU.updateFollowing();
+            GS.Services.API.getUserLastBroadcast().then(function(bc) {
+                GS.Services.SWF.ready.then(function() {
+                    GS.Services.SWF.resumeBroadcast(bc.BroadcastID);
+                    setTimeout(GU.startBroadcasting, 3000, bc);
+                });
+            });
+        }
+    },
+    'callback': function() {
+        if (songleft != GU.songInQueue()) {
+            songleft = GU.songInQueue();
+            if (songleft >= 2)
+                playingRandom = false;
+            GU.renameBroadcast();
+        }
+        GU.addSongToHistory();
+        if (songleft < 1)
+            GU.playRandomSong();
+        GU.deletePlayedSong();
+        GU.forcePlay();
+        /*
+            Idea for later:
+            To remove this callback, we can extends GS.Services.SWF.queueChange.
+        */
+    },
+    'deletePlayedSong': function() {
+        var previousSong;
+        while (true) {
+            previousSong = GS.Services.SWF.getCurrentQueue().previousSong;
+            if (previousSong != null)
+                GS.Services.SWF.removeSongs([previousSong.queueSongID]);
+            else
+                break;
+        }
+    },
+    'doParseMessage': function(current) {
+        var string = current.data;
+        var regexp = RegExp('^/([A-z0-9]*)([ ]+([A-z0-9 ,-?\!.*]+))?$');
+        var regResult = regexp.exec(string);
+        if (regResult != null) {
+            var indexFound = GU.findInArray(regResult[1],actionTable);
+            var currentAction = actionTable[indexFound];
+            if (currentAction instanceof Array && currentAction[0].every(function(element) {
+                return element(current.userID);
+            }))
+                currentAction[1](current, regResult[3]);
+            if (GU.guestOrWhite(current.userID)) {
+                indexFound = GU.findInArray(regResult[1],adminActions);
+                var currentAction = adminActions[indexFound];
+                if (currentAction instanceof Array && currentAction[0].every(function(element) {
+                    return element(current.userID);
+                }))
+                    currentAction[1](current, regResult[3]);
+            }
+        }
+    },
+    'findInArray': function(searchTerm, arrayName) { //case insensitive find in arrays
+        for (var key in arrayName){
+            if (arrayName.hasOwnProperty(key)){
+                var keyLower = key.toLowerCase();
+                var searchLower = searchTerm.toLowerCase();
+                if (searchLower == keyLower){
+                    return key;
+                }
+            }
+        }
+        return 'error';
+    },
+    'followerCheck': function(userid) {
+        return followingList.indexOf(userid) != -1;
+    },
+    'forcePlay': function() {
+        if (Grooveshark.getCurrentSongStatus().status != 'playing') {
+            if (new Date() - lastPlay > 4000 && !forcePlay) {
+                forcePlay = true;
+                Grooveshark.play();
+            }
+            if (new Date() - lastPlay > 8000) {
+                Grooveshark.removeCurrentSongFromQueue();
+                forcePlay = false;
+                lastPlay = new Date();
+            }
+        } else {
+            forcePlay = false;
+            lastPlay = new Date();
+        }
+    },
+    'getMatchedSongsList': function(stringFilter) {
+        var regex = RegExp(stringFilter, 'i');
+        var songs = GU.getPlaylistNextSongs();
+        var listToRemove = [];
+        songs.forEach(function(element) {
+            if (regex.test(element.AlbumName) ||
+                // regex.test(element.ArtistName) ||
+                regex.test(element.SongName))
+                listToRemove.push(element);
+        });
+        return listToRemove;
+    },
+    'getPlaylistNextSongs': function() {
+        var songs = GS.Services.SWF.getCurrentQueue().songs;
+        var index = GS.Services.SWF.getCurrentQueue().activeSong.queueSongID;
+        while (songs[0] != null && songs[0].queueSongID <= index) {
+            songs.shift();
+        }
+        return songs;
+    },
+
+    'getUserName': function(uID) {
+        var uName = '';
+        GS.Models.User.get(uID).then(function(u){
+            uName = u.get('Name');
+        })
+        return uName;
+    },
+    'guestCheck': function(userid) {
+        if (!GU.isGuesting(userid)) {
+            GU.sendMsg('Only Guests can use that feature, sorry!');
+            return false;
+        }
+        return true;
+    },
+    'guestOrWhite': function(userid) {
+        return (GU.isGuesting(userid) || GU.whiteListCheck(userid));
+    },
     'inBroadcast': function() {
         return $('#bc-take-over-btn').hasClass('hide');
     },
-    'sendMsg': function(msg) {
-        var broadcast = GS.getCurrentBroadcast();
-        if (broadcast === false)
-            return;
-
-        var maxMsgLength = 256; // the max number of caracters that can go in the gs chat
-        var index = 0;
-
-        while ((Math.floor(msg.length / maxMsgLength) + (msg.length % maxMsgLength != 0)) >= ++index) {
-            broadcast.sendChatMessage(msg.substr((index - 1) * maxMsgLength, maxMsgLength));
+    'inListCheck': function(userid, list) {
+        return list.split(',').indexOf("" + userid) != -1;
+    },
+    'isGuesting': function(userid) {
+        return GS.getCurrentBroadcast().attributes.vipUsers.some(function(elem) {
+            return elem.userID == userid;
+        });
+    },
+    'isListening': function(user){
+        if (isNaN(user)) {
+            return GS.getCurrentBroadcast().attributes.listeners.models.some(function(elem) {
+                return elem.attributes.Name == user;
+            });
+        } else {
+            return GS.getCurrentBroadcast().attributes.listeners.models.some(function(elem) {
+                return elem.attributes.UserID == user;
+            });
         }
-    },
-    'songInQueue': function() {
-        return $('#queue-num-total').text() - $('#queue-num').text();
-    },
-    'removeMsg': function() {
-        $('.chat-message').addClass('parsed');
     },
     'openSidePanel': function() {
         if ($('.icon-sidebar-open-m-gray')[0])
             $('.icon-sidebar-open-m-gray').click()
+    },
+    'ownerCheck': function(userid) {
+        if (userid != GS.getCurrentBroadcast().attributes.UserID) {
+            GU.sendMsg('Only the Master can use that feature, sorry!');
+            return false;
+        }
+        return true;
+    },
+    'playRandomSong': function()  {
+        playingRandom = true;
+        GU.RandomOrg(0,allSongsId.length)
+        var nextSong = allSongsId[rng];//Math.floor(Math.random() * allSongsId.length)];
+        if (nextSong != undefined) {
+            var nextSongIndex = lastPlayedSongs.indexOf(nextSong);
+            var maxTry = 5;
+            while (nextSongIndex != -1 && maxTry-- > 0) {
+                GU.RandomOrg(0,allSongsId.length)
+                var tmpSong = allSongsId[rng];//Math.floor(Math.random() * allSongsId.length)];
+                if (tmpSong != undefined) {
+                    var tmpIndex = lastPlayedSongs.indexOf(tmpSong);
+                    if (tmpIndex < nextSongIndex)
+                        nextSong = tmpSong;
+                }
+            }
+            Grooveshark.addSongsByID([nextSong]);
+        }
+    },
+    'RandomOrg': function(min, max) {
+        var oldRng = rng
+        $(function(){
+            $.ajax({
+                async: false,
+                url: 'http://www.random.org/integers/?num=1&min=' + min + '&max=' + max + '&col=1&base=10&format=plain&rnd=new',
+            })
+            .done(function(data){
+                var rand = data.split('\n');
+                rng = rand[0];
+            });
+        });
+        //Fallback RNG incase random.org has a problem
+        if (rng == oldRng || rng == undefined) {
+            var randArraySize = Math.floor(Math.random() * 100); //create an array of up to 100 elements
+            var randArray = []
+            for (i = 0; i < randArraySize; i++) { //populate array with random numbers
+                randArray[i] = Math.floor((Math.random() * max) + min);
+            }
+            rng = randArray[Math.floor(Math.random() * randArray.length)] //randomly choose an array element to use as random number
+        }
+    },
+    'removeMsg': function() {
+        $('.chat-message').addClass('parsed');
     },
     'renameBroadcast': function(bdcName) {
         var attributes = GS.getCurrentBroadcast().attributes;
@@ -79,354 +279,20 @@ var GU = {
             'Description': bdcName.substr(0, maxDescriptionLength)
         });
     },
-    'getPlaylistNextSongs': function() {
-        var songs = GS.Services.SWF.getCurrentQueue().songs;
-        var index = GS.Services.SWF.getCurrentQueue().activeSong.queueSongID;
-        while (songs[0] != null && songs[0].queueSongID <= index) {
-            songs.shift();
-        }
-        return songs;
-    },
-    'previewSongs': function(msg, parameter) {
-        var nbr = parseInt(parameter);
-        if (nbr <= 0 || isNaN(nbr))
-            nbr = GUParams.defaultSongPreview;
-        if (nbr > GUParams.maxSongPreview)
-            nbr = GUParams.maxSongPreview;
-        songs = GU.getPlaylistNextSongs();
-
-        var i = -1;
-        var string = '';
-        while (++i <= nbr) {
-            var curr = songs[i];
-            if (curr == null)
-                break;
-            string = string + '#' + i + ': \"' + curr.SongName + '\"" By: \"' + curr.ArtistName + "\"" + GUParams.separator;
-        }
-        GU.sendMsg('Next songs are: ' + string.substring(0, string.length - GUParams.separator.length));
-    },
-    'showPlaylist': function(message, stringFilter) {
-        GU.openSidePanel();
-        var string = '';
-        var regex = RegExp(stringFilter, 'i');
-        $('#sidebar-playlists-grid').find('.sidebar-playlist').each(function() {
-            var playlistName = $(this).find('.name').text();
-            if (regex.test(playlistName))
-                string = string + '#' + $(this).index() + ': ' + playlistName + GUParams.separator;
-        });
-        if (string == '')
-            string = 'No match found for ' + stringFilter;
-        else
-            string = 'Playlist matched:' + string.substring(0, string.length - GUParams.separator.length);
-        GU.sendMsg(string);
-    },
-    'playPlaylist': function(message, playlistId) {
-        GU.openSidePanel();
-        var playlistToPlay = $('#sidebar-playlists-grid').find('.sidebar-playlist')[playlistId];
-        if (playlistToPlay == null) {
-            GU.sendMsg('Cannot find playlist: ' + playlistId);
-        } else {
-            var playlistId = $(playlistToPlay).children(0).attr('data-playlist-id');
-            Grooveshark.addPlaylistByID(playlistId);
-            GU.sendMsg('Playlist \'' + $(playlistToPlay).find('.name').text() + '\' added to the queue.');
-        }
-    },
-    'playRandomSong': function() {
-        playingRandom = true;
-        var nextSong = allSongsId[Math.floor(Math.random() * allSongsId.length)];
-        if (nextSong != undefined) {
-            var nextSongIndex = lastPlayedSongs.indexOf(nextSong);
-            var maxTry = 5;
-            while (nextSongIndex != -1 && maxTry-- > 0) {
-                var tmpSong = allSongsId[Math.floor(Math.random() * allSongsId.length)];
-                if (tmpSong != undefined) {
-                    var tmpIndex = lastPlayedSongs.indexOf(tmpSong);
-                    if (tmpIndex < nextSongIndex)
-                        nextSong = tmpSong;
-                }
-            }
-            Grooveshark.addSongsByID([nextSong]);
-        }
-    },
-    'skip': function() {
-        Grooveshark.removeCurrentSongFromQueue();
-    },
-    'addToCollection': function() {
-        Grooveshark.addCurrentSongToLibrary();
-        GU.sendMsg('Song added to the favorite.');
-    },
-    'removeFromCollection': function() {
-        var currSong = Grooveshark.getCurrentSongStatus().song
-        GS.Services.API.userRemoveSongsFromLibrary(GS.getLoggedInUserID(), currSong.songID, currSong.albumID, currSong.artistID).then(function() {
-            GU.sendMsg('Song removed from the favorite.');
-        });
-    },
-    'deletePlayedSong': function() {
-        var previousSong;
-        while (true) {
-            previousSong = GS.Services.SWF.getCurrentQueue().previousSong;
-            if (previousSong != null)
-                GS.Services.SWF.removeSongs([previousSong.queueSongID]);
-            else
-                break;
-        }
-    },
-    'removeNextSong': function() {
-        var nextSong = GS.Services.SWF.getCurrentQueue().nextSong;
-        if (nextSong != null) {
-            GS.Services.SWF.removeSongs([nextSong.queueSongID]);
-        }
-    },
-    'removeLastSong': function(message, numberStr) {
-        var songs = GS.Services.SWF.getCurrentQueue().songs;
-        var allID = [];
-        var number = Math.floor(Number(numberStr));
-        if (isNaN(number) || number < 1)
-            number = 1;
-        while (--number >= 0) {
-            if (songs.length - 1 - number >= 0) {
-                var id = songs[songs.length - 1 - number].queueSongID;
-                if (id != GS.Services.SWF.getCurrentQueue().activeSong.queueSongID)
-                    allID.push(id);
-            }
-        }
-        if (allID.length > 0) {
-            GS.Services.SWF.removeSongs(allID);
-        }
-    },
-    'getMatchedSongsList': function(stringFilter) {
-        var regex = RegExp(stringFilter, 'i');
-        var songs = GU.getPlaylistNextSongs();
-        var listToRemove = [];
-        songs.forEach(function(element) {
-            if (regex.test(element.AlbumName) ||
-                // regex.test(element.ArtistName) ||
-                regex.test(element.SongName))
-                listToRemove.push(element);
-        });
-        return listToRemove;
-    },
-    'previewRemoveByName': function(message, stringFilter) {
-        var listToRemove = GU.getMatchedSongsList(stringFilter);
-        if (listToRemove.length > 10 || listToRemove.length == 0)
-            GU.sendMsg('' + listToRemove.length + 'Songs matched.');
-        else {
-            var string = 'Song matched: ';
-            listToRemove.forEach(function(element) {
-                string = string + element.SongName + ' ~ From: ' + element.AlbumName + GUParams.separator;
-            });
-            GU.sendMsg(string.substring(0, string.length - GUParams.separator.length));
-        }
-    },
-    'removeByName': function(message, stringFilter) {
-        //adding safeguard so that '/removeByName allSongs' must be typed to clear the queue.
-        if (stringFilter == undefined) {
-            GU.sendMsg("No songs were removed. Use \"/removeByName allSongs \" to clear the queue.");
+    'sendMsg': function(msg) {
+        var broadcast = GS.getCurrentBroadcast();
+        if (broadcast === false)
             return;
-        }
-        if (stringFilter == "allSongs") {
-            stringFilter = "";
-        }
-        var listToRemove = GU.getMatchedSongsList(stringFilter);
-        var idToRemove = [];
-        listToRemove.forEach(function(element) {
-            idToRemove.push(element.queueSongID);
-        });
-        GS.Services.SWF.removeSongs(idToRemove);
-        GU.sendMsg('Removed ' + idToRemove.length + ' songs.');
-    },
-    'fetchByName': function(message, stringFilter) {
-        var songToPlay = GU.getMatchedSongsList(stringFilter);
-        if (songToPlay.length > 0) {
-            GS.Services.SWF.moveSongsTo([songToPlay[0].queueSongID], 1, true);
-            var sName = songToPlay[0].SongName;
-            GU.sendMsg("Fetched \"" + sName +"\".");
-        } else {
-            GU.sendMsg("Unable to find song title matching: \"" + stringFilter + "\".");
-        }
-    },
-    'fetchLast': function(message, stringFilter) {
-        var songList = GS.Services.SWF.getCurrentQueue().songs;
-        if (songList.length > 2)
-            GS.Services.SWF.moveSongsTo([songList[songList.length - 1].queueSongID], 1, true);
-    },
-    'shuffle': function() {
-        $('.shuffle').click();
-        GU.sendMsg('The queue has been shuffled!');
-    },
-    'isGuesting': function(userid) {
-        return GS.getCurrentBroadcast().attributes.vipUsers.some(function(elem) {
-            return elem.userID == userid;
-        });
-    },
-    'guestCheck': function(userid) {
-        if (!GU.isGuesting(userid)) {
-            GU.sendMsg('Only Guests can use that feature, sorry!');
-            return false;
-        }
-        return true;
-    },
-    'inListCheck': function(userid, list) {
-        return list.split(',').indexOf("" + userid) != -1;
-    },
-    'followerCheck': function(userid) {
-        return followingList.indexOf(userid) != -1;
-    },
-    'strictWhiteListCheck': function(userid) {
-        if (GU.inListCheck(userid, GUParams.whitelist))
-            return true;
-        GU.sendMsg('Only user that are explicitly in the whitelist can use this feature, sorry!');
-        return false;
-    },
-    'whiteListCheck': function(userid) {
-        if (GU.inListCheck(userid, GUParams.whitelist)) // user in whitelist
-        {
-            return true;
-        } else if (GUParams.whitelistIncludesFollowing.toString() === 'true' && !GU.inListCheck(userid, GUParams.blacklist) && GU.followerCheck(userid)) {
-            return true;
-        }
-        //GU.sendMsg('Only ' + GUParams.whiteListName + ' can use that feature, sorry!');
-        return false;
-    },
-    'guestOrWhite': function(userid) {
-        return (GU.isGuesting(userid) || GU.whiteListCheck(userid));
-    },
-    'ownerCheck': function(userid) {
-        if (userid != GS.getCurrentBroadcast().attributes.UserID) {
-            GU.sendMsg('Only the Master can use that feature, sorry!');
-            return false;
-        }
-        return true;
-    },
-    'isListening': function(user){
-        if (isNaN(user)) {
-            return GS.getCurrentBroadcast().attributes.listeners.models.some(function(elem) {
-                return elem.attributes.Name == user;
-            });
-        } else {
-            return GS.getCurrentBroadcast().attributes.listeners.models.some(function(elem) {
-                return elem.attributes.UserID == user;
-            });
-        }
-    },
-    'doParseMessage': function(current) {
-        var string = current.data;
-        var regexp = RegExp('^/([A-z0-9]*)([ ]+([A-z0-9 ,-?\!.]+))?$');
-        var regResult = regexp.exec(string);
-        if (regResult != null) {
-            var currentAction = actionTable[regResult[1]];
-            if (currentAction instanceof Array && currentAction[0].every(function(element) {
-                return element(current.userID);
-            }))
-                currentAction[1](current, regResult[3]);
-            if (GU.guestOrWhite(current.userID)) {
-                var currentAction = adminActions[regResult[1]];
-                if (currentAction instanceof Array && currentAction[0].every(function(element) {
-                    return element(current.userID);
-                }))
-                    currentAction[1](current, regResult[3]);
-            }
-        }
-    },
-    'forcePlay': function() {
-        if (Grooveshark.getCurrentSongStatus().status != 'playing') {
-            if (new Date() - lastPlay > 4000 && !forcePlay) {
-                forcePlay = true;
-                Grooveshark.play();
-            }
-            if (new Date() - lastPlay > 8000) {
-                Grooveshark.removeCurrentSongFromQueue();
-                forcePlay = false;
-                lastPlay = new Date();
-            }
-        } else {
-            forcePlay = false;
-            lastPlay = new Date();
-        }
-    },
-    'addSongToHistory': function() {
-        if (Grooveshark.getCurrentSongStatus().song == null)
-            return;
-        var currSongID = Grooveshark.getCurrentSongStatus().song.songID;
-        if (lastPlayedSongs.length == 0 || lastPlayedSongs[lastPlayedSongs.length - 1] != currSongID) {
-            var posToRemove = lastPlayedSongs.indexOf(currSongID);
-            // Remove the song in the list
-            if (posToRemove != -1)
-                lastPlayedSongs.splice(posToRemove, 1);
-            lastPlayedSongs.push(currSongID);
-            // Remove the oldest song in the list if it goes over the limit.
-            if (GUParams.historyLength < lastPlayedSongs.length)
-                lastPlayedSongs.shift();
-        }
-    },
-    'callback': function() {
-        if (songleft != GU.songInQueue()) {
-            songleft = GU.songInQueue();
-            if (songleft >= 2)
-                playingRandom = false;
-            GU.renameBroadcast();
-        }
-        GU.addSongToHistory();
-        if (songleft < 1)
-            GU.playRandomSong();
-        GU.deletePlayedSong();
-        GU.forcePlay();
-        /*
-            Idea for later:
-            To remove this callback, we can extends GS.Services.SWF.queueChange.
-        */
-    },
-    'guest': function(current) {
-        var userID = current.userID;
 
-        if (GS.getCurrentBroadcast().getPermissionsForUserID(userID) != undefined) // is guest
-            GS.Services.SWF.broadcastRemoveVIPUser(userID);
-        else
-            GS.Services.SWF.broadcastAddVIPUser(userID, 0, 63); // 63 seems to be the permission mask
-    },
-    'makeGuest': function(current, guestID) {
-        guestID = Number(guestID);
-        if (!isNaN(guestID))
-            GS.Services.SWF.broadcastAddVIPUser(guestID, 0, 63); // 63 seems to be the permission mask
-    },
-    'ping': function(current) {
-        //GU.sendMsg('Ping resp! Oh, and your user ID is ' + current.userID + '!');
-        GU.sendMsg('Pong!');
-    },
-    'about': function() {
-        GU.sendMsg('This broadcast is currently running "EGSA Broadcast Bot" v' + GUParams.version + ', created by grooveshark.com/karb0n13 . GitHub: http://goo.gl/UPGkO5 Forked From: http://goo.gl/vWM41J');
-    },
-    'help': function(message, parameter) {
-        if (parameter != undefined) {
-            var currentAction = actionTable[parameter];
-            if (currentAction instanceof Array) {
-                GU.sendMsg('Help: /' + parameter + ' ' + currentAction[2]);
-                return;
-            }
-        }
-        var helpMsg = 'Command available:';
-        Object.keys(actionTable).forEach(function(actionName) {
-            helpMsg = helpMsg + ' ' + actionName;
-        });
-        helpMsg = helpMsg + '. Type /help [command name] for in depth help.';
-        GU.sendMsg(helpMsg);
+        var maxMsgLength = 256; // the max number of caracters that can go in the gs chat
+        var index = 0;
 
-        //if user is a guest then show these:
-        var isAdmin = GU.guestOrWhite(message.userID);
-        if (isAdmin) {
-            helpMsg = 'Admin commands:'
-            if (parameter != undefined) {
-                var currentAction = adminActions[parameter];
-                if (currentAction instanceof Array) {
-                    GU.sendMsg('Help: /' + parameter + ' ' + currentAction[2]);
-                    return;
-                }
-            }
-            Object.keys(adminActions).forEach(function(actionName) {
-                helpMsg = helpMsg + ' ' + actionName;
-            });
-            GU.sendMsg(helpMsg);
+        while ((Math.floor(msg.length / maxMsgLength) + (msg.length % maxMsgLength != 0)) >= ++index) {
+            broadcast.sendChatMessage(msg.substr((index - 1) * maxMsgLength, maxMsgLength));
         }
+    },
+    'songInQueue': function() {
+        return $('#queue-num-total').text() - $('#queue-num').text();
     },
     'startBroadcasting': function(bc) {
         var properties = {
@@ -465,6 +331,12 @@ var GU = {
         };
 
     },
+    'strictWhiteListCheck': function(userid) {
+        if (GU.inListCheck(userid, GUParams.whitelist))
+            return true;
+        GU.sendMsg('Only user that are explicitly in the whitelist can use this feature, sorry!');
+        return false;
+    },
     'updateFollowing': function() {
         GS.Services.API.userGetFollowersFollowing().then(
             function(alluser) {
@@ -476,51 +348,108 @@ var GU = {
                 });
             });
     },
-    'broadcast': function() {
-        if (GS.getLoggedInUserID() <= 0)
-            alert('Cannot login!');
-        else {
-            GU.updateFollowing();
-            GS.Services.API.getUserLastBroadcast().then(function(bc) {
-                GS.Services.SWF.ready.then(function() {
-                    GS.Services.SWF.resumeBroadcast(bc.BroadcastID);
-                    setTimeout(GU.startBroadcasting, 3000, bc);
-                });
-            });
+    'whiteListCheck': function(userid) {
+        if (GU.inListCheck(userid, GUParams.whitelist)) // user in whitelist
+        {
+            return true;
+        } else if (GUParams.whitelistIncludesFollowing.toString() === 'true' && !GU.inListCheck(userid, GUParams.blacklist) && GU.followerCheck(userid)) {
+            return true;
         }
+        return false;
     },
-/**********************
-    New Code Section
-***********************/
-    'unGuest': function(current, parameter) {
-        if (parameter == undefined) {
+
+/*  #####################
+    Chat Window Commands
+    #####################*/
+    'about': function() {
+        GU.sendMsg('This broadcast is currently running "EGSA Broadcast Bot" v' + GUParams.version + ', created by grooveshark.com/karb0n13 . GitHub: http://goo.gl/UPGkO5 Forked From: http://goo.gl/vWM41J');
+    },
+    'addToCollection': function() {
+        Grooveshark.addCurrentSongToLibrary();
+        GU.sendMsg('Song added to the favorite.');
+    },
+    'ask': function(current, parameter) {
+        //var rng = 0;
+        var uName = GU.getUserName(current.userID);
+        var respText = '';
+        if (parameter == undefined){
             return;
         }
-        if (parameter.toUpperCase() == 'ALL') {
-            GS.getCurrentBroadcast().attributes.publishersUsersIDs.forEach(function(guestID) {
-                GS.Services.SWF.broadcastRemoveVIPUser(guestID);
-            });
-        } else {
-            if (isNaN(parameter)){
-                GU.sendMsg(parameter.toString() + " is not a valid guestID.")
-            } else {
-            if (!GU.isGuesting(parameter)) {
-                GS.Models.User.get(parameter).then(function(u){
-                    uName = u.get('Name');
-                    if (uName == undefined){
-                        GU.sendMsg(parameter.toString() + " is not a valid ID.")
-                    }
-                    GU.sendMsg(uName + ' is not a Guest, sorry!');
-                })
-                return false;
-            } else {
-                GS.Services.SWF.broadcastRemoveVIPUser(parameter);
-            }                
+        var answers = [
+            'Concentrate and ask again',
+            'Hell no.',
+            'Yes',
+            'As I see it, yes',
+            'Signs point to yes',
+            'It is decidedly so',
+            'Very doubtful',
+            'Cannot predict now',
+            'All signs point to me not giving a chainsaw.',
+            'Ask the Internet.',
+            'Without a doubt',
+            'Ask your mom.',
+            'Yes definitely',
+            'Outlook good',
+            'YES! Definitely. maybe...',
+            'Don\'t count on it',
+            'My reply is no',
+            'The voices tell me to tell you \"Yes.\" They also say that I should gouge out your eyes with my nose…',
+            'Outlook not so good',
+            'Most likely',
+            'You may rely on it',
+            'Dafuq?',
+            'It is certain',
+            'No',
+            'LOL',
+            'If I told you, I\'d have to kill you.',
+            'Ask again later',
+            '404 Error',
+            'Sorry, I wasn\'t listening.',
+            'Reply hazy try again',
+            'Please seek professional help.',
+            'IDGAC',
+            'Do you really need to ask?',
+            'My sources say no',
+            'Sadly, yes.',
+            'Better not tell you now',
+            'Not in a million years',
+            'No, I would not like to buy some girl scout cookies.'
+        ]
+        GU.RandomOrg(1, answers.length);
+        while (answers[rng] == undefined) {
+            GU.RandomOrg(1, answers.length);
+        }
+        respText = '@' + uName + ", " + answers[rng];
+        GU.sendMsg(respText);
+    },
+    'fact': function() {
+        var textHTTP;
+        var textFile = '/data/facts.txt';
+        textHTTP = new XMLHttpRequest();
+        textHTTP.onreadystatechange=function(){
+            if (textHTTP.readyState==4 && textHTTP.status==200){
+                //console.log(textHTTP.responseText);
+                var fileContentLines = textHTTP.responseText.split('\n');
+                    GU.RandomOrg(1,fileContentLines.length + 1);
+                    var randomLineIndex = rng; //Math.floor((Math.random() * fileContentLines.length) + 1);
+                    var randomLine = fileContentLines[randomLineIndex];
+                    GU.sendMsg(randomLine);
             }
         }
+        textHTTP.open('GET', 'chrome-extension://' + GUParams.extensionId + textFile, true);
+        textHTTP.send();
     },
-    'fetchLast': function(message, parameter) //@author: Flumble
-    {
+    'fetchByName': function(message, stringFilter) {
+        var songToPlay = GU.getMatchedSongsList(stringFilter);
+        if (songToPlay.length > 0) {
+            GS.Services.SWF.moveSongsTo([songToPlay[0].queueSongID], 1, true);
+            var sName = songToPlay[0].SongName;
+            GU.sendMsg("Fetched \"" + sName +"\".");
+        } else {
+            GU.sendMsg("Unable to find song title matching: \"" + stringFilter + "\".");
+        }
+    },
+    'fetchLast': function(message, parameter) { //@author: Flumble
         var count = 1;
         var queue = GS.Services.SWF.getCurrentQueue();
         var nextIndex = queue.activeSong.index + 1;
@@ -567,23 +496,142 @@ var GU = {
                 GU.sendMsg(msgUpdate)
             });
     },
-    'rules': function() //Original Author: davpat, modified to prevent floods.
-    {
-        var ruleslist = GUParams.rules.split(',');
-        var msgDelay = 0;
-        var loopTick = 0;
-        var msg = "";
-        for (i = 0; i < ruleslist.length; i++) {
-            if (ruleslist[i] != "") {
-                msg = ruleslist[i];
-                msgDelay = loopTick * 1000;
-                setTimeout(GU.sendMsg, msgDelay, msg);
-                loopTick = loopTick + 1;
+    'guest': function(current) {
+        var userID = current.userID;
+
+        if (GS.getCurrentBroadcast().getPermissionsForUserID(userID) != undefined) // is guest
+            GS.Services.SWF.broadcastRemoveVIPUser(userID);
+        else
+            GS.Services.SWF.broadcastAddVIPUser(userID, 0, 63); // 63 seems to be the permission mask
+    },
+    'help': function(message, parameter) {
+        if (parameter != undefined) {
+            var currentAction = actionTable[parameter];
+            if (currentAction instanceof Array) {
+                GU.sendMsg('Help: /' + parameter + ' ' + currentAction[2]);
+                return;
             }
         }
+        var helpMsg = 'Command available:';
+        Object.keys(actionTable).forEach(function(actionName) {
+            helpMsg = helpMsg + ' ' + actionName;
+        });
+        helpMsg = helpMsg + '. Type /help [command name] for in depth help.';
+        GU.sendMsg(helpMsg);
+
+        //if user is a guest then show these:
+        var isAdmin = GU.guestOrWhite(message.userID);
+        if (isAdmin) {
+            helpMsg = 'Admin commands:'
+            if (parameter != undefined) {
+                var currentAction = adminActions[parameter];
+                if (currentAction instanceof Array) {
+                    GU.sendMsg('Help: /' + parameter + ' ' + currentAction[2]);
+                    return;
+                }
+            }
+            Object.keys(adminActions).forEach(function(actionName) {
+                helpMsg = helpMsg + ' ' + actionName;
+            });
+            GU.sendMsg(helpMsg);
+        }
     },
-    'roll': function(current, parameter) // Author: Deku
-    {
+    'makeGuest': function(current, guestID) {
+        guestID = Number(guestID);
+        if (!isNaN(guestID))
+            GS.Services.SWF.broadcastAddVIPUser(guestID, 0, 63); // 63 seems to be the permission mask
+    },
+    'ping': function(current) {
+        GU.sendMsg('Pong!');
+    },
+    'playPlaylist': function(message, playlistId) {
+        GU.openSidePanel();
+        var playlistToPlay = $('#sidebar-playlists-grid').find('.sidebar-playlist')[playlistId];
+        if (playlistToPlay == null) {
+            GU.sendMsg('Cannot find playlist: ' + playlistId);
+        } else {
+            var playlistId = $(playlistToPlay).children(0).attr('data-playlist-id');
+            Grooveshark.addPlaylistByID(playlistId);
+            GU.sendMsg('Playlist \'' + $(playlistToPlay).find('.name').text() + '\' added to the queue.');
+        }
+    },
+    'previewRemoveByName': function(message, stringFilter) {
+        var listToRemove = GU.getMatchedSongsList(stringFilter);
+        if (listToRemove.length > 10 || listToRemove.length == 0)
+            GU.sendMsg('' + listToRemove.length + 'Songs matched.');
+        else {
+            var string = 'Song matched: ';
+            listToRemove.forEach(function(element) {
+                string = string + element.SongName + ' ~ From: ' + element.AlbumName + GUParams.separator;
+            });
+            GU.sendMsg(string.substring(0, string.length - GUParams.separator.length));
+        }
+    },
+    'previewSongs': function(msg, parameter) {
+        var nbr = parseInt(parameter);
+        if (nbr <= 0 || isNaN(nbr))
+            nbr = GUParams.defaultSongPreview;
+        if (nbr > GUParams.maxSongPreview)
+            nbr = GUParams.maxSongPreview;
+        songs = GU.getPlaylistNextSongs();
+
+        var i = -1;
+        var string = '';
+        while (++i <= nbr) {
+            var curr = songs[i];
+            if (curr == null)
+                break;
+            string = string + '#' + i + ': \"' + curr.SongName + '\"" By: \"' + curr.ArtistName + "\"" + GUParams.separator;
+        }
+        GU.sendMsg('Next songs are: ' + string.substring(0, string.length - GUParams.separator.length));
+    },
+    'removeByName': function(message, stringFilter) {
+        //adding safeguard so that '/removeByName allSongs' must be typed to clear the queue.
+        if (stringFilter == undefined) {
+            GU.sendMsg("No songs were removed. Use \"/removeByName allSongs \" to clear the queue.");
+            return;
+        }
+        if (stringFilter == "allSongs") {
+            stringFilter = "";
+        }
+        var listToRemove = GU.getMatchedSongsList(stringFilter);
+        var idToRemove = [];
+        listToRemove.forEach(function(element) {
+            idToRemove.push(element.queueSongID);
+        });
+        GS.Services.SWF.removeSongs(idToRemove);
+        GU.sendMsg('Removed ' + idToRemove.length + ' songs.');
+    },
+    'removeFromCollection': function() {
+        var currSong = Grooveshark.getCurrentSongStatus().song
+        GS.Services.API.userRemoveSongsFromLibrary(GS.getLoggedInUserID(), currSong.songID, currSong.albumID, currSong.artistID).then(function() {
+            GU.sendMsg('Song removed from the favorite.');
+        });
+    },
+    'removeLastSong': function(message, numberStr) {
+        var songs = GS.Services.SWF.getCurrentQueue().songs;
+        var allID = [];
+        var number = Math.floor(Number(numberStr));
+        if (isNaN(number) || number < 1)
+            number = 1;
+        while (--number >= 0) {
+            if (songs.length - 1 - number >= 0) {
+                var id = songs[songs.length - 1 - number].queueSongID;
+                if (id != GS.Services.SWF.getCurrentQueue().activeSong.queueSongID)
+                    allID.push(id);
+            }
+        }
+        if (allID.length > 0) {
+            GS.Services.SWF.removeSongs(allID);
+        }
+    },
+    'removeNextSong': function() {
+        var nextSong = GS.Services.SWF.getCurrentQueue().nextSong;
+        if (nextSong != null) {
+            GS.Services.SWF.removeSongs([nextSong.queueSongID]);
+        }
+    },
+    'roll': function(current, parameter){
         var uName = "";
         var uID = current.userID;
         GS.Models.User.get(uID).then(function(u) {
@@ -602,7 +650,8 @@ var GU = {
             var number = parseInt(parameter);
             max = number;
             if (number > 2 && number < 10001) {
-                var roll = Math.floor(Math.random() * max) + min;
+                GU.RandomOrg(min, max);
+                var roll = rng; //Math.floor(Math.random() * max) + min;
                 GU.sendMsg("[Roll: " + min + " - " + max + " ] EGSA-tan summons a magical dice. " 
                     + uName + " throws it and gets a " + roll 
                     + (roll > 9000 ? ". It's over 9000!" : "."));
@@ -618,7 +667,8 @@ var GU = {
                 }
                 // For 2 sides we use a coin
                 if (number == 2) {
-                    var flip = Math.floor(Math.random() * max) + min;
+                    GU.RandomOrg(min, max);
+                    var flip = rng; //Math.floor(Math.random() * max) + min;
                     var coin = "";
                     switch (flip) {
                         case 1:
@@ -637,92 +687,81 @@ var GU = {
             }
         }
     },
-    'fact': function() {
-        var textHTTP;
-        var textFile = '/data/facts.txt';
-        textHTTP = new XMLHttpRequest();
-        textHTTP.onreadystatechange=function(){
-            if (textHTTP.readyState==4 && textHTTP.status==200){
-                //console.log(textHTTP.responseText);
-                var fileContentLines = textHTTP.responseText.split('\n');
-                    var randomLineIndex = Math.floor((Math.random() * fileContentLines.length) + 1);
-                    var randomLine = fileContentLines[randomLineIndex];
-                    GU.sendMsg(randomLine);
+    'rules': function() { //Original Author: davpat, modified to prevent floods.
+        var ruleslist = GUParams.rules.split(',');
+        var msgDelay = 0;
+        var loopTick = 0;
+        var msg = "";
+        for (i = 0; i < ruleslist.length; i++) {
+            if (ruleslist[i] != "") {
+                msg = ruleslist[i];
+                msgDelay = loopTick * 1000;
+                setTimeout(GU.sendMsg, msgDelay, msg);
+                loopTick = loopTick + 1;
             }
         }
-        textHTTP.open('GET', 'chrome-extension://' + GUParams.extensionId + textFile, true);
-        textHTTP.send();
+    },
+    'showPlaylist': function(message, stringFilter) {
+        GU.openSidePanel();
+        var string = '';
+        var regex = RegExp(stringFilter, 'i');
+        $('#sidebar-playlists-grid').find('.sidebar-playlist').each(function() {
+            var playlistName = $(this).find('.name').text();
+            if (regex.test(playlistName))
+                string = string + '#' + $(this).index() + ': ' + playlistName + GUParams.separator;
+        });
+        if (string == '')
+            string = 'No match found for ' + stringFilter;
+        else
+            string = 'Playlist matched:' + string.substring(0, string.length - GUParams.separator.length);
+        GU.sendMsg(string);
+    },
+    'shuffle': function(current, parameter) {
+        var r = 1;
+        if (parameter != undefined) {
+            if (!isNaN(parameter)) {
+                r = parseInt(parameter);
+                if (r > 3) { r = 3 }
+            }
+        }
+        for (i = 0; i < r; i++) {
+            $('.shuffle').click();
+        }        
+        GU.sendMsg('The queue has been shuffled!');
+    },
+    'skip': function() {
+        Grooveshark.removeCurrentSongFromQueue();
+    },
+    'unGuest': function(current, parameter) {
+        if (parameter == undefined) {
+            return;
+        }
+        if (parameter.toUpperCase() == 'ALL') {
+            GS.getCurrentBroadcast().attributes.publishersUsersIDs.forEach(function(guestID) {
+                GS.Services.SWF.broadcastRemoveVIPUser(guestID);
+            });
+        } else {
+            if (isNaN(parameter)){
+                GU.sendMsg(parameter.toString() + " is not a valid guestID.")
+            } else {
+            if (!GU.isGuesting(parameter)) {
+                GS.Models.User.get(parameter).then(function(u){
+                    uName = u.get('Name');
+                    if (uName == undefined){
+                        GU.sendMsg(parameter.toString() + " is not a valid ID.")
+                    }
+                    GU.sendMsg(uName + ' is not a Guest, sorry!');
+                })
+                return false;
+            } else {
+                GS.Services.SWF.broadcastRemoveVIPUser(parameter);
+            }                
+            }
+        }
     },
     'whoamI': function(current){
         var uName = GU.getUserName(current.userID);
         GU.sendMsg('You are:' + uName + '. Your ID is: ' + current.userID + '.');
-    },
-    'getUserName': function(uID){
-        var uName = '';
-        GS.Models.User.get(uID).then(function(u){
-            uName = u.get('Name');
-        })
-        return uName;
-    },
-    'ask': function(current, parameter) {
-        var rng = 0;
-        var uName = GU.getUserName(current.userID);
-        var respText = '';
-        if (parameter == undefined){
-            return;
-        }
-        var answers = [
-            'Concentrate and ask again',
-            'Hell no.',
-            'Yes',
-            'As I see it, yes',
-            'Signs point to yes',
-            'It is decidedly so',
-            'Very doubtful',
-            'Cannot predict now',
-            'All signs point to me not giving a chainsaw.',
-            'Ask the Internet.',
-            'Without a doubt',
-            'Ask your mom.',
-            'Yes definitely',
-            'Outlook good',
-            'YES! Definitely. maybe...',
-            'Don\'t count on it',
-            'My reply is no',
-            'The voices tell me to tell you \"Yes.\" They also say that I should gouge out your eyes with my nose…',
-            'Outlook not so good',
-            'Most likely',
-            'You may rely on it',
-            'Dafuq?',
-            'It is certain',
-            'No',
-            'LOL',
-            'If I told you, I\'d have to kill you.',
-            'Ask again later',
-            '404 Error',
-            'Sorry, I wasn\'t listening.',
-            'Reply hazy try again',
-            'Please seek professional help.',
-            'IDGAC',
-            'Do you really need to ask?',
-            'My sources say no',
-            'Sadly, yes.',
-            'Better not tell you now',
-            'Not in a million years'
-        ]
-        if (rng == 0){
-            var c = 0
-            rng = Math.floor((Math.random() * 100) + 1);
-            while ((rng > (answers.length + 1)) || (c == 10)) {
-                rng = Math.floor((Math.random() * 100) + 1);
-                c = c++;
-            }
-            if (rng > (answers.length + 1)) {
-                rng = Math.floor((Math.random() * (answers.length)) + 1);
-            }
-        }
-        respText = '@' + uName + ", " + answers[rng];
-        GU.sendMsg(respText);
     }
 };
 adminActions = {
@@ -785,7 +824,7 @@ actionTable = {
     'ping': [
         [GU.inBroadcast], GU.ping, '- Ping the BOT.'
     ],
-    'whoamI': [
+    'whoAmI': [
         [GU.inBroadcast], GU.whoamI, '- Return User Name & ID.'
     ],
     'ask': [

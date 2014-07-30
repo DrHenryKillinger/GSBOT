@@ -39,26 +39,21 @@
 
 var tabState = {};
 
-var injectCode = function(tabId)
-{
+var injectCode = function(tabId) {
 	console.log(tabState[tabId]);
 	var regexRes = tabState[tabId];
 	delete tabState[tabId];
 
 	// prepare the injection of localStorage inside GUParams & content_script.js
-	var injection = 'document.body.appendChild(document.createElement(\'script\')).innerHTML='
-	+ JSON.stringify(
-		'var GUParams = JSON.parse(' + JSON.stringify(JSON.stringify(localStorage)) + ');'
-		+ 'GUParams.userReq = ' + JSON.stringify(regexRes[1] != undefined ? '' : (regexRes[3] != undefined ? regexRes[3] : localStorage.forceLoginUsername)) + ';'
-		+ 'GUParams.passReq = ' + JSON.stringify(regexRes[1] != undefined ? '' : (regexRes[5] != undefined ? regexRes[5] : localStorage.forceLoginPassword)) + ';'
-		+ 'GUParams.version = ' + JSON.stringify(chrome.app.getDetails().version) + ';'
-		+ 'GUParams.extensionId = ' + JSON.stringify(chrome.runtime.id) + ';'
-		) + ';'
-	+ "document.body.appendChild(document.createElement('script')).src='"
-	+ chrome.extension.getURL("content_script.js") +"';";
-	// inject the new script after 4 seconds on the new page.
-	chrome.tabs.executeScript(tabId, {code: injection}, null);
+	var injection = 'document.body.appendChild(document.createElement(\'script\')).innerHTML=' + JSON.stringify(
+		'var GUParams = JSON.parse(' + JSON.stringify(JSON.stringify(localStorage)) + ');' + 'GUParams.userReq = ' + JSON.stringify(regexRes[1] != undefined ? '' : (regexRes[3] != undefined ? regexRes[3] : localStorage.forceLoginUsername)) + ';' + 'GUParams.passReq = ' + JSON.stringify(regexRes[1] != undefined ? '' : (regexRes[5] != undefined ? regexRes[5] : localStorage.forceLoginPassword)) + ';' + 'GUParams.version = ' + JSON.stringify(chrome.app.getDetails().version) + ';' + 'GUParams.extensionId = ' + JSON.stringify(chrome.runtime.id) + ';'
+	) + ';' + "document.body.appendChild(document.createElement('script')).src='" + chrome.extension.getURL("content_script.js") + "';";
+		// inject the new script after 4 seconds on the new page.
+	chrome.tabs.executeScript(tabId, {
+		code: injection
+	}, null);
 }
+
 
 var callbackFunction = function(tabId, changeInfo, tab) {
 	var newUrl = changeInfo.url;
