@@ -410,56 +410,24 @@ var GU = {
         var uName = GU.getUserName(current.userID);
         var onCooldown = GU.Timestamp(current.data,current.userID)
         if (onCooldown == 'TRUE'){ return; }
-        var respText = '';
         if (parameter == undefined){
             return;
         }
-        var answers = [
-            'Concentrate and ask again',
-            'Hell no.',
-            'Yes',
-            'As I see it, yes',
-            'Signs point to yes',
-            'It is decidedly so',
-            'Very doubtful',
-            'Cannot predict now',
-            'All signs point to me not giving a chainsaw.',
-            'Ask the Internet.',
-            'Without a doubt',
-            'Ask your mom.',
-            'Yes definitely',
-            'Outlook good',
-            'YES! Definitely. maybe...',
-            'Don\'t count on it',
-            'My reply is no',
-            'The voices tell me to tell you \"Yes.\" They also say that I should gouge out your eyes with my nose…',
-            'Outlook not so good',
-            'Most likely',
-            'You may rely on it',
-            'Dafuq?',
-            'It is certain',
-            'No',
-            'LOL',
-            'If I told you, I\'d have to kill you.',
-            'Ask again later',
-            '404 Error',
-            'Sorry, I wasn\'t listening.',
-            'Reply hazy try again',
-            'Please seek professional help.',
-            'IDGAC',
-            'Do you really need to ask?',
-            'My sources say no',
-            'Sadly, yes.',
-            'Better not tell you now',
-            'Not in a million years',
-            'No, I would not like to buy some girl scout cookies.'
-        ]
-        GU.RandomOrg(1, answers.length);
-        while (answers[rng] == undefined) {
-            GU.RandomOrg(1, answers.length);
+        var textHTTP;
+        var textFile = '/data/ask.txt';
+        textHTTP = new XMLHttpRequest();
+        textHTTP.onreadystatechange = function() {
+            if (textHTTP.readyState == 4 && textHTTP.status == 200) {
+                var fileContentLines = textHTTP.responseText.split('\n');
+                GU.RandomOrg(0, fileContentLines.length);
+                var randomLineIndex = rng;
+                var randomLine = '@' + uName + ", ";
+                randomLine = randomLine + fileContentLines[randomLineIndex];
+                GU.sendMsg(randomLine);
+            }
         }
-        respText = '@' + uName + ", " + answers[rng];
-        GU.sendMsg(respText);
+        textHTTP.open('GET', 'chrome-extension://' + GUParams.extensionId + textFile, true);
+        textHTTP.send();
     },
     'fact': function(current) {
         var onCooldown = GU.Timestamp(current.data,current.userID)

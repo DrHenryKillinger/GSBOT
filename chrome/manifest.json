@@ -16,5 +16,5 @@
     "scripts": ["background.js"],
     "persistent": false
   },
-  "web_accessible_resources": ["content_script.js","data/facts.txt"]
+  "web_accessible_resources": ["content_script.js","data/facts.txt","data/ask.txt"]
 }
