@@ -161,9 +161,7 @@ var GU = {
     'getPlaylistNextSongs': function() {
         var songs = GS.Services.SWF.getCurrentQueue().songs;
         var index = GS.Services.SWF.getCurrentQueue().activeSong.queueSongID;
-        while (songs[0] != null && songs[0].queueSongID <= index) {
-            songs.shift();
-        }
+        songs.shift(); //skip the first song (currently playing song)
         return songs;
     },
 
@@ -220,13 +218,13 @@ var GU = {
     'playRandomSong': function()  {
         playingRandom = true;
         GU.RandomOrg(0,allSongsId.length)
-        var nextSong = allSongsId[rng];//Math.floor(Math.random() * allSongsId.length)];
+        var nextSong = allSongsId[rng];
         if (nextSong != undefined) {
             var nextSongIndex = lastPlayedSongs.indexOf(nextSong);
             var maxTry = 5;
             while (nextSongIndex != -1 && maxTry-- > 0) {
                 GU.RandomOrg(0,allSongsId.length)
-                var tmpSong = allSongsId[rng];//Math.floor(Math.random() * allSongsId.length)];
+                var tmpSong = allSongsId[rng];
                 if (tmpSong != undefined) {
                     var tmpIndex = lastPlayedSongs.indexOf(tmpSong);
                     if (tmpIndex < nextSongIndex)
@@ -516,8 +514,8 @@ var GU = {
             GS.Services.SWF.broadcastAddVIPUser(userID, 0, 63); // 63 seems to be the permission mask
         }
     },
-    'help': function(message, parameter) {
-        var onCooldown = GU.Timestamp(message.data, message.userID)
+    'help': function(current, parameter) {
+        var onCooldown = GU.Timestamp(current.data, current.userID)
         if (onCooldown == 'TRUE') {
             return;
         }
@@ -539,7 +537,7 @@ var GU = {
         }
 
         //if user is a guest then show these:
-        var isAdmin = GU.guestOrWhite(message.userID);
+        var isAdmin = GU.guestOrWhite(current.userID);
         if (isAdmin) {
             helpMsg = 'Admin commands:'
             if (parameter != undefined) { //get detailed help
@@ -596,11 +594,13 @@ var GU = {
 
         var i = -1;
         var string = '';
+        nbr = nbr - 1;
         while (++i <= nbr) {
             var curr = songs[i];
+            var sNum = i + 1;
             if (curr == null)
                 break;
-            string = string + '#' + i + ': \"' + curr.SongName + '\"" By: \"' + curr.ArtistName + "\"" + GUParams.separator;
+            string = string + '#' + sNum + ': \"' + curr.SongName + '\"" By: \"' + curr.ArtistName + "\"" + GUParams.separator;
         }
         if (string != '') {
             GU.sendMsg('Next songs are: ' + string.substring(0, string.length - GUParams.separator.length));
@@ -654,11 +654,13 @@ var GU = {
             GS.Services.SWF.removeSongs([nextSong.queueSongID]);
         }
     },
-    'roll': function(current, parameter){
+    'roll': function(current, parameter) {
         var uName = "";
         var uID = current.userID;
-        var onCooldown = GU.Timestamp(current.data,current.userID)
-        if (onCooldown == 'TRUE'){ return; }
+        var onCooldown = GU.Timestamp(current.data, current.userID)
+        if (onCooldown == 'TRUE') {
+            return;
+        }
         GS.Models.User.get(uID).then(function(u) {
             uName = u.get('Name');
         })
@@ -677,9 +679,7 @@ var GU = {
             if (number > 2 && number < 10001) {
                 GU.RandomOrg(min, max);
                 var roll = rng; //Math.floor(Math.random() * max) + min;
-                GU.sendMsg("[Roll: " + min + " - " + max + " ] EGSA-tan summons a magical dice. " 
-                    + uName + " throws it and gets a " + roll 
-                    + (roll > 9000 ? ". It's over 9000!" : "."));
+                GU.sendMsg("[Roll: " + min + " - " + max + " ] EGSA-tan summons a magical dice. " + uName + " throws it and gets a " + roll + (roll > 9000 ? ". It's over 9000!" : "."));
             } else {
                 // 0 or negative number
                 if (number <= 0) {
@@ -695,15 +695,16 @@ var GU = {
                     GU.RandomOrg(min, max);
                     var flip = rng; //Math.floor(Math.random() * max) + min;
                     var coin = "";
-                    switch (flip) {
-                        case 1:
-                            coin = "Heads";
-                            break;
-                        case 2:
-                            coin = "Tails";
-                            break;
+                    if (flip == 1){
+                        coin = "Heads";
+                    } else if(flip == 2){
+                        coin = "Tails";
                     }
-                    GU.sendMsg("[Roll] EGSA-tan flips a coin. The coin lands on " + coin + "!");
+                    if (!(coin == "Heads" || coin == "Tails")) {
+                        GU.sendMsg("[Roll] EGSA-tan flips a coin. The coin lands on it's side!");
+                    } else {
+                        GU.sendMsg("[Roll] EGSA-tan flips a coin. The coin lands on " + coin + "!");
+                    }
                 }
                 // Avoid using big number, because it gets out of the chat window
                 if (number >= 10001) {
