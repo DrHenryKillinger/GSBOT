@@ -838,6 +838,9 @@ actionTable = {
     ],
     'about': [
         [GU.inBroadcast], GU.about, '- About this software.*'
+    ],
+    'queueSize': [
+        [GU.inBroadcast], GU.songInQueue, '- Display the number of songs to play next in the queue.'
     ]
 };
 
