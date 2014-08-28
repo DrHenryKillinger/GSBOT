@@ -33,6 +33,7 @@ var followingList = [];
 var adminActions = {};
 var rng;
 var coolDown= {};
+var seenLast={};
 
 // GroovesharkUtils
 var GU = {
@@ -204,6 +205,7 @@ var GU = {
             });
         }
     },
+    'monthNumber': function(e) {var t=parseInt(e);var n;switch(t){case 0:n="Jan.";break;case 1:n="Feb.";break;case 2:n="Mar.";break;case 3:n="Apr.";break;case 4:n="May";break;case 5:n="Jun.";break;case 6:n="Jul.";break;case 7:n="Aug.";break;case 8:n="Sep.";break;case 9:n="Oct.";break;case 10:n="Nov.";break;case 11:n="Dec.";break}return n},
     'openSidePanel': function() {
         if ($('.icon-sidebar-open-m-gray')[0])
             $('.icon-sidebar-open-m-gray').click()
@@ -278,6 +280,35 @@ var GU = {
             'Description': bdcName.substr(0, maxDescriptionLength)
         });
     },
+    'seenLog': function(t) {
+        var uID = t.userID;
+        var uName = GU.getUserName(uID);
+        var d = new Date();
+        var GMT = d.toJSON();//d.toUTCString();
+        //action 0=LeftBC 1=JoinedBC 2=Chat
+        var action = 2;
+        if (t.joined != undefined) {
+            action = t.joined;
+        }
+        if (Object.keys(seenLast).length !== 0) {
+            for (var k in seenLast) {
+                if (seenLast[k][0] == uID) {
+                    seenLast[k][1] = uName;
+                    seenLast[k][2] = action;
+                    seenLast[k][3] = GMT;
+                    d = 1;
+                    break;
+                } else {
+                    d = 0;
+                }
+            }
+        } else {
+            d = 0;
+        }
+        if (d === 0) {
+            seenLast[Object.keys(seenLast).length] = [uID, uName, action, GMT];
+        }
+    },
     'sendMsg': function(msg) {
         var broadcast = GS.getCurrentBroadcast();
         if (broadcast === false)
@@ -326,7 +357,12 @@ var GU = {
         var handleBroadcastSaved = GS.Services.SWF.handleBroadcastChat;
         GS.Services.SWF.handleBroadcastChat = function(e, t) {
             handleBroadcastSaved(e, t);
+            GU.seenLog(t);
             GU.doParseMessage(t);
+        };
+        //Overload Join/Leave events
+        GS.Services.SWF.handleBroadcastListenerJoined = function(e, t){
+            GU.seenLog(t);
         };
 
     },
@@ -336,10 +372,11 @@ var GU = {
         GU.sendMsg('Only user that are explicitly in the whitelist can use this feature, sorry!');
         return false;
     },
-    'Timestamp': function(cmd, usr) { //return TRUE if on cooldown, FALSE if not
+    'Timestamp': function(cmd, usr, waitTime) { //return TRUE if on cooldown, FALSE if not
         cmd = cmd.substring(1, cmd.length);
         cmd = cmd.split(' ');
         cmd = cmd[0];
+        waitTime = waitTime * 1000;
         var tNow = Date.now();
         var tLog = 0;
         var inLog = 0;
@@ -349,13 +386,13 @@ var GU = {
                     if (coolDown[k][1] == usr) {
                         tLog = coolDown[k][2];
                         var cdOver = parseInt(tLog);
-                        cdOver += 30000
+                        cdOver += waitTime
                         inLog = 1;
                         if (tNow < cdOver) {
-                            return 'TRUE';
+                            return true;
                         } else {
                             delete coolDown[k];
-                            return 'FALSE';
+                            return false;
                         }
                     } else {
                         inLog = 0;
@@ -366,11 +403,11 @@ var GU = {
             }
         } else {
             coolDown[0] = [cmd, usr, Date.now()];
-            return 'FALSE';
+            return false;
         }
         if (inLog == 0) {
             coolDown[Object.keys(coolDown).length] = [cmd, usr, Date.now()];
-            return 'FALSE';
+            return false;
         }
     },
     'updateFollowing': function() {
@@ -406,8 +443,8 @@ var GU = {
     },
     'ask': function(current, parameter) {
         var uName = GU.getUserName(current.userID);
-        var onCooldown = GU.Timestamp(current.data,current.userID)
-        if (onCooldown == 'TRUE'){ return; }
+        var onCooldown = GU.Timestamp(current.data,current.userID,20)
+        if (onCooldown == true){ return; }
         if (parameter == undefined){
             return;
         }
@@ -428,8 +465,8 @@ var GU = {
         textHTTP.send();
     },
     'fact': function(current) {
-        var onCooldown = GU.Timestamp(current.data,current.userID)
-        if (onCooldown == 'TRUE'){ return; }
+        var onCooldown = GU.Timestamp(current.data,current.userID,30)
+        if (onCooldown == true){ return; }
         var textHTTP;
         var textFile = '/data/facts.txt';
         textHTTP = new XMLHttpRequest();
@@ -515,8 +552,8 @@ var GU = {
         }
     },
     'help': function(current, parameter) {
-        var onCooldown = GU.Timestamp(current.data, current.userID)
-        if (onCooldown == 'TRUE') {
+        var onCooldown = GU.Timestamp(current.data, current.userID,30)
+        if (onCooldown == true) {
             return;
         }
         if (parameter != undefined) { //get detailed help
@@ -581,8 +618,8 @@ var GU = {
         }
     },
     'previewSongs': function(msg, parameter) {
-        var onCooldown = GU.Timestamp(msg.data, msg.userID)
-        if (onCooldown == 'TRUE') {
+        var onCooldown = GU.Timestamp(msg.data, msg.userID,30)
+        if (onCooldown == true) {
             return;
         }
         var nbr = parseInt(parameter);
@@ -657,8 +694,8 @@ var GU = {
     'roll': function(current, parameter) {
         var uName = "";
         var uID = current.userID;
-        var onCooldown = GU.Timestamp(current.data, current.userID)
-        if (onCooldown == 'TRUE') {
+        var onCooldown = GU.Timestamp(current.data, current.userID,15)
+        if (onCooldown == true) {
             return;
         }
         GS.Models.User.get(uID).then(function(u) {
@@ -693,7 +730,7 @@ var GU = {
                 // For 2 sides we use a coin
                 if (number == 2) {
                     GU.RandomOrg(min, max);
-                    var flip = rng; //Math.floor(Math.random() * max) + min;
+                    var flip = rng;
                     var coin = "";
                     if (flip == 1){
                         coin = "Heads";
@@ -713,9 +750,9 @@ var GU = {
             }
         }
     },
-    'rules': function() { //Original Author: davpat, modified to prevent floods.
-        var onCooldown = GU.Timestamp(current.data,current.userID)
-        if (onCooldown == 'TRUE'){ return; }
+    'rules': function(current) {
+        var onCooldown = GU.Timestamp(current.data,current.userID,30);
+        if (onCooldown == true){ return; }
         var ruleslist = GUParams.rules.split(',');
         var msgDelay = 0;
         var loopTick = 0;
@@ -726,6 +763,77 @@ var GU = {
                 msgDelay = loopTick * 1000;
                 setTimeout(GU.sendMsg, msgDelay, msg);
                 loopTick = loopTick + 1;
+            }
+        }
+    },
+    'seen': function(current, parameter) {
+        var onCooldown;
+        var sL;
+        var uName;
+        var uAction;
+        var sMsg;
+        if (parameter.length < 3){
+            onCooldown =  GU.Timestamp(current.data, current.userID, 5);
+            if (onCooldown){return;}
+            sMsg = 'I need at least 3 letters of the person\'s name to find them.'
+            GU.sendMsg(sMsg);
+            return;
+        }
+        onCooldown = GU.Timestamp(current.data, current.userID, 15);
+        if (onCooldown){return;}
+        if (Object.keys(seenLast)) {
+            for (var k in seenLast) {
+                if (!isNaN(parameter)) {
+                    if (seenLast[k][0] == parameter) {
+                        sL = k;
+                        break;
+                    }
+                } else {
+                    if (sSearch(k, parameter)) {
+                        sL = k;
+                        break;
+                    }
+                }
+
+            }
+        }
+        if (sL != undefined) {
+            switch (seenLast[sL][2]) {
+                case 0:
+                    uAction = 'leave the broadcast';
+                    break;
+                case 1:
+                    uAction = 'join the broadcast';
+                    break;
+                case 2:
+                    uAction = 'say something';
+                    break;
+            }
+            var oDate = new Date(seenLast[sL][3]);
+            var nDate = new Date();
+            var nowDate = nDate.getUTCMonth() + ' ' + nDate.getUTCDate();
+            var thenDate = oDate.getUTCMonth() + ' ' + oDate.getUTCDate();
+            var sTime = oDate.getUTCHours() + ':' + oDate.getUTCMinutes() + ':' + oDate.getUTCSeconds() + ' GMT';
+            sMsg = 'I saw ' + seenLast[sL][1] + ' ' + uAction + ' ';
+            if (thenDate == nowDate) {
+                sMsg = sMsg + 'Today';
+            } else {
+                var month = monthNumber(oDate.getUTCMonth());
+                sMsg = 'on ' + month + ' ' + oDate.getUTCDate();
+            }
+            sMsg = sMsg + ' at ' + sTime + '.';
+        } else {
+            sMsg = 'I\'m sorry. I couldn\'t find anyone with \"' + parameter + '\" in their name.';
+        }
+        GU.sendMsg(sMsg);
+
+        function sSearch(index, partial) {
+            var regexp = RegExp(partial.toLowerCase(), 'g');
+            var found = regexp.exec(seenLast[index][1].toLowerCase());
+            if (found == undefined) {
+                return false;
+            } else {
+                return true;
             }
         }
     },
@@ -761,8 +869,8 @@ var GU = {
         Grooveshark.removeCurrentSongFromQueue();
     },
     'whoamI': function(current){
-        var onCooldown = GU.Timestamp(current.data,current.userID)
-        if (onCooldown == 'TRUE'){ return; }
+        var onCooldown = GU.Timestamp(current.data,current.userID,30)
+        if (onCooldown == true){ return; }
         var uName = GU.getUserName(current.userID);
         GU.sendMsg('You are:' + uName + '. Your ID is: ' + current.userID + '.');
     }
@@ -836,11 +944,11 @@ actionTable = {
     'fact': [
         [GU.inBroadcast], GU.fact, '- Display a random fact.*'
     ],
+    'seen': [
+        [GU.inBroadcast], GU.seen, '[ID/name] - When was the last time user has been seen.'
+    ],
     'about': [
         [GU.inBroadcast], GU.about, '- About this software.*'
-    ],
-    'queueSize': [
-        [GU.inBroadcast], GU.songInQueue, '- Display the number of songs to play next in the queue.'
     ]
 };
 
