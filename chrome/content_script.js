@@ -237,7 +237,7 @@ var GU = {
         }
     },
     'RandomOrg': function(min, max) {
-        var oldRng = rng
+        rng = undefined;
         $(function(){
             $.ajax({
                 async: false,
@@ -249,11 +249,11 @@ var GU = {
             });
         });
         //Fallback RNG incase random.org has a problem
-        if (rng == oldRng || rng == undefined) {
+            if (rng == undefined){
             var randArraySize = Math.floor(Math.random() * 100); //create an array of up to 100 elements
             var randArray = []
-            for (i = 0; i < randArraySize; i++) { //populate array with random numbers
-                randArray[i] = Math.floor((Math.random() * max) + min);
+            for (counter = 0; counter < randArraySize; counter++) { //populate array with random numbers
+                randArray[counter] = Math.floor((Math.random() * max) + min);
             }
             rng = randArray[Math.floor(Math.random() * randArray.length)] //randomly choose an array element to use as random number
         }
@@ -712,11 +712,23 @@ var GU = {
                 GU.sendMsg('┐(・。・┐)♪ Never gonna give you up. Never gonna let you down. Never gonna run around and desert you... ♪ ¬_¬');
                 return;
             }
-            var regexp = RegExp('([0-9]+)[d]([0-9]+)','g');
+            var regexp = RegExp('([0-9]+)[d]([0-9]+)','ig');
             var dndDice = regexp.exec(parameter);
-            if (Object.keys(dndDice)){
+            if (dndDice != null){
                 var q = parseInt(dndDice[1]);
                 var s = parseInt(dndDice[2]);
+                if (q == 0) {
+                    GU.sendMsg('Okay... I summoned 0, ' + s + '-sided dice. It adds up to... 0...')
+                    return;
+                }
+                if (s == 1) {
+                    GU.sendMsg('You want to roll ' + q + ', 1-sided dice? What do you think you\'ll get? A freaking cookie?! NO! You get ' + q + '!');
+                    return;
+                }
+                if (s == 0) {
+                    GU.sendMsg('No, I\'m not going to roll any 0-sided dice, and you can\'t make me! :P');
+                    return;
+                }
                 if ((q > 20) || ((q * s) > 10001)){
                     GU.sendMsg('Sorry, that\'s too much. Try rolling fewer or smaller dice.');
                     return;
@@ -849,8 +861,8 @@ var GU = {
         GU.sendMsg(sMsg);
 
         function sSearch(index, partial) {
-            var userName = seenLast[index][1]
-            if (userName.indexOf(partial) > -1){
+            var userName = seenLast[index][1].toLowerCase()
+            if (userName.indexOf(partial.toLowerCase()) > -1){
                 return true;
             } else {
                 return false;
