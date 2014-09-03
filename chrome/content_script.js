@@ -34,6 +34,7 @@ var adminActions = {};
 var rng;
 var coolDown= {};
 var seenLast={};
+var myID;
 
 // GroovesharkUtils
 var GU = {
@@ -281,32 +282,34 @@ var GU = {
         });
     },
     'seenLog': function(t) {
-        var uID = t.userID;
-        var uName = GU.getUserName(uID);
-        var d = new Date();
-        var GMT = d.toJSON();//d.toUTCString();
-        //action 0=LeftBC 1=JoinedBC 2=Chat
-        var action = 2;
-        if (t.joined != undefined) {
-            action = t.joined;
-        }
-        if (Object.keys(seenLast).length !== 0) {
-            for (var k in seenLast) {
-                if (seenLast[k][0] == uID) {
-                    seenLast[k][1] = uName;
-                    seenLast[k][2] = action;
-                    seenLast[k][3] = GMT;
-                    d = 1;
-                    break;
-                } else {
-                    d = 0;
-                }
+        if (t.userID != myID) {
+            var uID = t.userID;
+            var uName = GU.getUserName(uID);
+            var d = new Date();
+            var GMT = d.toJSON(); //d.toUTCString();
+            //action 0=LeftBC 1=JoinedBC 2=Chat
+            var action = 2;
+            if (t.joined != undefined) {
+                action = t.joined;
             }
-        } else {
-            d = 0;
-        }
-        if (d === 0) {
-            seenLast[Object.keys(seenLast).length] = [uID, uName, action, GMT];
+            if (Object.keys(seenLast).length !== 0) {
+                for (var k in seenLast) {
+                    if (seenLast[k][0] == uID) {
+                        seenLast[k][1] = uName;
+                        seenLast[k][2] = action;
+                        seenLast[k][3] = GMT;
+                        d = 1;
+                        break;
+                    } else {
+                        d = 0;
+                    }
+                }
+            } else {
+                d = 0;
+            }
+            if (d === 0) {
+                seenLast[Object.keys(seenLast).length] = [uID, uName, action, GMT];
+            }
         }
     },
     'sendMsg': function(msg) {
@@ -330,6 +333,7 @@ var GU = {
             'Name': bc.Name,
             'Tag': bc.Tag
         };
+        myID = bc.UserID;
         if (GS.getCurrentBroadcast() === false) {
             GS.Services.SWF.startBroadcast(properties);
             setTimeout(GU.startBroadcasting, 3000, bc);
@@ -805,15 +809,19 @@ var GU = {
         var uName;
         var uAction;
         var sMsg;
-        if (parameter.length < 3){
-            onCooldown =  GU.Timestamp(current.data, current.userID, 5);
-            if (onCooldown){return;}
+        if (parameter.length < 3) {
+            onCooldown = GU.Timestamp(current.data, current.userID, 5);
+            if (onCooldown) {
+                return;
+            }
             sMsg = 'I need at least 3 letters of the person\'s name to find them.'
             GU.sendMsg(sMsg);
             return;
         }
         onCooldown = GU.Timestamp(current.data, current.userID, 15);
-        if (onCooldown){return;}
+        if (onCooldown) {
+            return;
+        }
         if (Object.keys(seenLast)) {
             for (var k in seenLast) {
                 if ((!isNaN(parameter)) && (parameter.length > 5)) {
@@ -831,30 +839,59 @@ var GU = {
             }
         }
         if (sL != undefined) {
-            switch (seenLast[sL][2]) {
-                case 0:
-                    uAction = 'leave the broadcast';
-                    break;
-                case 1:
-                    uAction = 'join the broadcast';
-                    break;
-                case 2:
-                    uAction = 'say something';
-                    break;
-            }
-            var oDate = new Date(seenLast[sL][3]);
-            var nDate = new Date();
-            var nowDate = nDate.getUTCMonth() + ' ' + nDate.getUTCDate();
-            var thenDate = oDate.getUTCMonth() + ' ' + oDate.getUTCDate();
-            var sTime = oDate.getUTCHours() + ':' + oDate.getUTCMinutes() + ':' + oDate.getUTCSeconds() + ' GMT';
-            sMsg = 'I saw ' + seenLast[sL][1] + ' ' + uAction + ' ';
-            if (thenDate == nowDate) {
-                sMsg = sMsg + 'Today';
+            if (seenLast[sL][0] == current.userID) {
+                sMsg = "You are asking about yourself? Stop asking me to do stupid things.";
             } else {
-                var month = monthNumber(oDate.getUTCMonth());
-                sMsg = 'on ' + month + ' ' + oDate.getUTCDate();
+                switch (seenLast[sL][2]) {
+                    case 0:
+                        uAction = 'leave the broadcast';
+                        break;
+                    case 1:
+                        uAction = 'join the broadcast';
+                        break;
+                    case 2:
+                        uAction = 'say something';
+                        break;
+                }
+                var oDate = new Date(seenLast[sL][3]);
+                var nDate = new Date();
+                var diffDate = Math.abs(nDate - oDate);
+                var elapsedD = parseInt(diffDate / (1000 * 60 * 60 * 24));
+                var dbl = oDate.getUTCHours();
+                if (dbl < 10) {
+                    dbl = '0' + dbl;
+                }
+                var sTime = dbl + ':';
+                dbl = oDate.getUTCMinutes();
+                if (dbl < 10) {
+                    dbl = '0' + dbl;
+                }
+                sTime = sTime + dbl + ':';
+                dbl = oDate.getUTCSeconds();
+                if (dbl < 10) {
+                    dbl = '0' + dbl;
+                }
+                sTime = sTime + dbl + ' GMT';
+                sMsg = 'I saw ' + seenLast[sL][1] + ' ' + uAction + ' ';
+                if (elapsedD == 0) {
+                    var elapsedH = parseInt((diffDate / (1000 * 60 * 60)) % 24);
+                    var elapsedM = parseInt((diffDate / (1000 * 60)) % 60);
+                    var elapsedS = parseInt((diffDate / 1000) % 60);
+                    if (elapsedH != 0) {
+                        sMsg = sMsg + elapsedH + 'h ' + elapsedM + 'm ago,';
+                    }
+                    if ((elapsedH == 0) && (elapsedM != 0)) {
+                        sMsg = sMsg + elapsedM + 'm ' + elapsedS + 's ago,';
+                    }
+                    if ((elapsedH == 0) && (elapsedM == 0)) {
+                        sMsg = sMsg + elapsedS + 's ago,';
+                    }
+                } else {
+                    var month = GU.monthNumber(oDate.getUTCMonth());
+                    sMsg = 'on ' + month + ' ' + oDate.getUTCDate();
+                }
+                sMsg = sMsg + ' at ' + sTime + '.';
             }
-            sMsg = sMsg + ' at ' + sTime + '.';
         } else {
             sMsg = 'I\'m sorry. I couldn\'t find anyone with \"' + parameter + '\" in their name.';
         }
@@ -862,7 +899,7 @@ var GU = {
 
         function sSearch(index, partial) {
             var userName = seenLast[index][1].toLowerCase()
-            if (userName.indexOf(partial.toLowerCase()) > -1){
+            if (userName.indexOf(partial.toLowerCase()) > -1) {
                 return true;
             } else {
                 return false;
